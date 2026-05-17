@@ -1,0 +1,85 @@
+[project]
+name = "dialectical-chess"
+version = "0.1.0"
+description = "A UCI-capable chess engine experiment built around dialectical move arguments"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "ctoth" },
+]
+keywords = [
+    "chess",
+    "uci",
+    "argumentation",
+    "formal-argumentation",
+    "dialectical-reasoning",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment :: Board Games",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "chess>=1.11.0",
+    "formal-argumentation @ git+https://github.com/ctoth/argumentation.git@67a31205364f1eeb4933e336c1ef76012bb198af",
+    "z3-solver>=4.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/ctoth/dialectical-chess"
+Repository = "https://github.com/ctoth/dialectical-chess"
+Issues = "https://github.com/ctoth/dialectical-chess/issues"
+
+[project.scripts]
+dialectical-chess-bench = "dialectical_chess.bench_cli:main"
+dialectical-chess-matrix-summary = "dialectical_chess.matrix_summary:main"
+dialectical-chess-owned = "dialectical_chess.owned_cli:main"
+dialectical-chess-positional-summary = "dialectical_chess.positional_summary:main"
+dialectical-chess-probe = "dialectical_chess.probe_cli:main"
+dialectical-chess-random-uci = "dialectical_chess.random_uci:main"
+dialectical-chess-tactical-witness-summary = "dialectical_chess.tactical_witness_summary:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["dialectical_chess"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"dialectical_chess/fixtures" = "dialectical_chess/fixtures"
+
+[tool.pyright]
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"
+include = ["dialectical_chess", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: focused unit-level contract tests",
+    "property: property-based or metamorphic tests",
+    "differential: differential or oracle-comparison tests",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.0",
+    "pyright>=1.1.390",
+    "pytest>=8.0",
+    "pytest-timeout>=2.3",
+]
