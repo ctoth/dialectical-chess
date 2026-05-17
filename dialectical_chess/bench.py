@@ -295,7 +295,7 @@ def run_tactical_witness_comparison(args: argparse.Namespace) -> dict[str, Any]:
         ("search1_vs_search1_no_fork", "search1", "search1_no_fork"),
         ("fork_off_vs_search1_no_fork", "fork_off", "search1_no_fork"),
     )
-    variant_totals = {
+    variant_totals: dict[str, dict[str, float | int]] = {
         name: {"total": 0, "solved": 0}
         for name in variants
     }

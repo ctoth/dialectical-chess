@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -32,15 +32,12 @@ class ReplyAnalysisCache:
     checkmate_misses: int = 0
     defense_nodes: int = 0
     truncated: bool = False
-    truncation_reasons: set[str] = None
+    truncation_reasons: set[str] = field(default_factory=set)
 
     def __post_init__(self) -> None:
         self._legal_moves: dict[Any, tuple[Any, ...]] = {}
         self._applied: dict[tuple[Any, str], Any] = {}
         self._checkmates: dict[Any, bool] = {}
-        if self.truncation_reasons is None:
-            self.truncation_reasons = set()
-
     def legal_moves(self, board: Any) -> tuple[Any, ...]:
         if board in self._legal_moves:
             self.legal_move_hits += 1
@@ -118,7 +115,10 @@ def negamax(board: Any, depth: int) -> SearchResult:
         if (
             best is None
             or candidate.score > best.score
-            or (candidate.score == best.score and move.uci() < best_move.uci())
+            or (
+                candidate.score == best.score
+                and (best_move is None or move.uci() < best_move.uci())
+            )
         ):
             best = candidate
             best_move = move
@@ -150,7 +150,10 @@ def alphabeta(
         if (
             best is None
             or candidate.score > best.score
-            or (candidate.score == best.score and move.uci() < best_move.uci())
+            or (
+                candidate.score == best.score
+                and (best_move is None or move.uci() < best_move.uci())
+            )
         ):
             best = candidate
             best_move = move

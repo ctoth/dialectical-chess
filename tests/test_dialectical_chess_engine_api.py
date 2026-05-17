@@ -3,6 +3,7 @@ from __future__ import annotations
 from argparse import Namespace
 from io import StringIO
 
+import chess
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -114,7 +115,7 @@ def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
         positional_reasons=True,
     )
 
-    result = bench.score_board(object(), {"a1a8"}, args)
+    result = bench.score_board(chess.Board(), {"a1a8"}, args)
 
     assert result["selected_uci"] == "a1a8"
     assert result["reasons"] == ["fake:engine"]

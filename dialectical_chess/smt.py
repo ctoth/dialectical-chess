@@ -38,7 +38,7 @@ class ForkWitness:
 
 def smt_mate_in_one_moves(board: Any) -> frozenset[str]:
     try:
-        from z3 import Bool, Or, Solver, sat
+        from z3 import Bool, Or, Solver, is_true, sat
     except ImportError:
         return frozenset()
 
@@ -58,7 +58,7 @@ def smt_mate_in_one_moves(board: Any) -> frozenset[str]:
     witnesses = {
         move
         for move, variable in mate_moves.items()
-        if model.eval(variable, model_completion=True)
+        if is_true(model.eval(variable, model_completion=True))
     }
     return frozenset(move for move in witnesses if verifies_mate_in_one(board, move))
 
