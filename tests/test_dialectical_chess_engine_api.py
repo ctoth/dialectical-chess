@@ -253,6 +253,28 @@ def test_critical_clock_profile_rejects_selected_forced_mate() -> None:
     assert choose_uci_move(board, settings=settings) == "e2e3"
 
 
+def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(monkeypatch) -> None:
+    from dialectical_chess import engine as engine_module
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import choose_uci_move, settings_for_go
+
+    def reject_unbounded_mate_search(*args, **kwargs) -> bool:
+        raise AssertionError("critical profile should not run selected forced-mate proof in wide positions")
+
+    monkeypatch.setattr(engine_module, "has_forced_mate", reject_unbounded_mate_search)
+    board = owned_board_from_fen("1rb1kr2/pp1p2pp/2nQ2n1/b5B1/5p2/2P2N2/PPK2P1P/R4B1R b - - 3 25")
+    settings = settings_for_go(
+        EngineSettings(search_depth=2, search_backend="alphabeta"),
+        board,
+        "go btime 2400 wtime 30000 binc 100 winc 100",
+    )
+
+    assert settings.search_depth == 0
+    assert not settings.reply_mate_scan
+    assert choose_uci_move(board, settings=settings) != "0000"
+
+
 def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
