@@ -337,6 +337,21 @@ def test_argument_selector_rejects_reply_mate_without_search_depth() -> None:
     assert decision.move_uci != "c2c4"
 
 
+def test_uncastled_flank_pawn_push_gets_king_safety_objection() -> None:
+    board = owned_board_from_fen("r3k1nr/5ppp/p7/2b2q2/PnP2P2/1Q1p4/1P1P2PP/R1B1K1NR w KQkq - 2 14")
+    probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}
+
+    assert "king_safety:flank_pawn_weakening:g2g4" in probes["g2g4"].objections
+    assert probes["g2g4"].score < probes["b3c3"].score
+
+
+def test_castled_flank_pawn_push_does_not_get_uncastled_objection() -> None:
+    board = owned_board_from_fen("4k3/8/8/8/8/8/6PP/6K1 w - - 0 14")
+    probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}
+
+    assert "king_safety:flank_pawn_weakening:g2g4" not in probes["g2g4"].objections
+
+
 def test_queen_flank_invasion_gets_king_safety_objection() -> None:
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

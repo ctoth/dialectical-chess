@@ -261,17 +261,26 @@ def material_or_promotion_gain(probe: MoveProbe) -> int:
 
 
 def severe_objection_count(probe: MoveProbe) -> int:
-    return sum(
-        1
-        for objection in probe.objections
-        if objection.startswith("safety:queen_blunder:")
-        or objection.startswith("opening:king_walk:")
+    return sum(severe_objection_weight(objection) for objection in probe.objections)
+
+
+def severe_objection_weight(objection: str) -> int:
+    if is_forced_mate_refutation(objection):
+        return 3
+    if objection.startswith("tactical:allows_reply_mate_in_one:"):
+        return 3
+    if objection.startswith("safety:queen_blunder:"):
+        return 2
+    if objection.startswith("king_safety:queen_flank_invasion:"):
+        return 2
+    if (
+        objection.startswith("opening:king_walk:")
         or objection.startswith("opening:premature_queen:")
         or objection.startswith("opening:premature_rook:")
-        or objection.startswith("king_safety:queen_flank_invasion:")
-        or objection.startswith("tactical:allows_reply_mate_in_one:")
-        or is_forced_mate_refutation(objection)
-    )
+        or objection.startswith("king_safety:flank_pawn_weakening:")
+    ):
+        return 1
+    return 0
 
 
 def is_forced_mate_refutation(objection: str) -> bool:

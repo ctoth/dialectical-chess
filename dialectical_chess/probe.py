@@ -121,6 +121,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             king_objections, king_score = opening_king_safety_objections(board, move)
             objections.extend(king_objections)
             score += king_score
+            flank_pawn_objections, flank_pawn_score = flank_pawn_weakening_objections(board, move)
+            objections.extend(flank_pawn_objections)
+            score += flank_pawn_score
             flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
             objections.extend(flank_objections)
             score += flank_score
@@ -329,6 +332,28 @@ def opening_king_safety_objections(
     return ((f"opening:king_walk:{move.uci()}",), -400)
 
 
+def flank_pawn_weakening_objections(
+    board: OwnedBoard,
+    move: Any,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() != "p" or board.fullmove_number > 20:
+        return (), 0
+    color = piece_color(piece)
+    if file_of(move.from_square) not in {6, 7}:
+        return (), 0
+    if king_is_castled(board, color):
+        return (), 0
+    return ((f"king_safety:flank_pawn_weakening:{move.uci()}",), -900)
+
+
+def king_is_castled(board: OwnedBoard, color: str) -> bool:
+    king_square = board.king_square(color)
+    if color == "w":
+        return king_square in {square_index("g1"), square_index("c1")}
+    return king_square in {square_index("g8"), square_index("c8")}
+
+
 def queen_flank_invasion_objections(
     board: OwnedBoard,
     move: Any,
@@ -351,7 +376,7 @@ def queen_flank_invasion_objections(
                 labels.append(f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(target)}")
     if not labels:
         return (), 0
-    return tuple(sorted(set(labels))), -1_000
+    return tuple(sorted(set(labels))), -2_000
 
 
 def king_flank_pawn_squares(color: str) -> frozenset[int]:
