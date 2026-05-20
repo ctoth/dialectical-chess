@@ -599,7 +599,7 @@ def scan_forced_reply_mates_for_candidate_moves(
     )
     updated: dict[str, MoveProbe] = {}
     scanned: set[str] = set()
-    scan_budget = candidate_limit * 2 if search_depth == 1 else candidate_limit
+    scan_budget = candidate_limit * 3 if search_depth == 1 else candidate_limit
     while len(scanned) < scan_budget:
         current_probes = [updated.get(probe.uci, probe) for probe in probes]
         made_progress = False
@@ -751,7 +751,7 @@ def should_scan_reply_forced_mate(
             return True
         if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objections, -100):
             return True
-        if piece.lower() == "p" and has_search_refutation_at_most(objections, -1_400):
+        if has_search_refutation_at_most(objections, -200):
             return True
         if (
             legal_move_count is not None
