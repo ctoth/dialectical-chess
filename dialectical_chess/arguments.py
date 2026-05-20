@@ -291,6 +291,7 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
         or objection.startswith("opening:minor_retreat:")
         or objection.startswith("king_safety:flank_pawn_weakening:")
         or objection.startswith("king_safety:castled_flank_pawn_weakening:")
+        or objection.startswith("king_safety:flank_pawn_lunge:")
     ):
         return 1
     if objection.startswith("opening:premature_minor_check:"):

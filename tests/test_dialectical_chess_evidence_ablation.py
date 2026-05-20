@@ -545,6 +545,7 @@ def test_uncastled_flank_pawn_push_gets_king_safety_objection() -> None:
     probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}
 
     assert "king_safety:flank_pawn_weakening:g2g4" in probes["g2g4"].objections
+    assert "king_safety:flank_pawn_lunge:g2g4" in probes["g2g4"].objections
     assert probes["g2g4"].score < probes["b3c3"].score
 
 
@@ -591,6 +592,23 @@ def test_argument_selector_rejects_castled_flank_pawn_weakening() -> None:
     graph = build_root_argument_graph(probes)
 
     assert choose_move(probes, graph, selector_mode="argument") == safe
+
+
+def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
+    board = owned_board_from_fen("r1bqk1nr/1ppp1ppp/2n5/p1bN4/4P1Q1/8/PPP2PPP/R1B1KBNR b KQkq - 1 6")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "g7g6"
 
 
 def test_queen_flank_invasion_gets_king_safety_objection() -> None:

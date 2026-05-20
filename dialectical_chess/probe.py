@@ -425,13 +425,21 @@ def flank_pawn_weakening_objections(
     color = piece_color(piece)
     king_square = board.king_square(color)
     from_file = file_of(move.from_square)
+    labels: list[str] = []
+    score = 0
     if king_square in {square_index("g1"), square_index("g8")} and from_file in {6, 7}:
-        return ((f"king_safety:castled_flank_pawn_weakening:{move.uci()}",), -900)
-    if king_square in {square_index("c1"), square_index("c8")} and from_file in {0, 1, 2}:
-        return ((f"king_safety:castled_flank_pawn_weakening:{move.uci()}",), -900)
-    if from_file not in {6, 7}:
-        return (), 0
-    return ((f"king_safety:flank_pawn_weakening:{move.uci()}",), -900)
+        labels.append(f"king_safety:castled_flank_pawn_weakening:{move.uci()}")
+        score -= 900
+    elif king_square in {square_index("c1"), square_index("c8")} and from_file in {0, 1, 2}:
+        labels.append(f"king_safety:castled_flank_pawn_weakening:{move.uci()}")
+        score -= 900
+    elif from_file in {6, 7}:
+        labels.append(f"king_safety:flank_pawn_weakening:{move.uci()}")
+        score -= 900
+    if labels and abs(rank_of(move.to_square) - rank_of(move.from_square)) == 2:
+        labels.append(f"king_safety:flank_pawn_lunge:{move.uci()}")
+        score -= 400
+    return tuple(labels), score
 
 
 def ignored_hanging_piece_objections(
