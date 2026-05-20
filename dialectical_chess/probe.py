@@ -735,7 +735,7 @@ def scan_forced_reply_mates_for_candidate_moves(
     if search_depth not in {0, 1, 2}:
         return probes
     if search_depth == 0:
-        candidate_limit = 2
+        candidate_limit = 8
     elif search_depth == 1:
         candidate_limit = 6
     else:
@@ -847,6 +847,7 @@ def forced_reply_mate_scan_candidates(
     for probe in sorted(
         eligible,
         key=lambda candidate: (
+            forced_reply_mate_risk_sort_key(candidate.objections),
             search_refutation_sort_key(candidate.objections),
             -candidate.score,
             candidate.uci,
@@ -856,6 +857,18 @@ def forced_reply_mate_scan_candidates(
         if len(selected) >= candidate_limit:
             break
     return list(selected.values())
+
+
+def forced_reply_mate_risk_sort_key(objections: tuple[str, ...]) -> int:
+    if any(
+        objection.startswith("king_safety:")
+        or objection.startswith("opening:king_walk:")
+        or objection.startswith("opening:king_center_flight:")
+        or objection.startswith("safety:queen_blunder:")
+        for objection in objections
+    ):
+        return 0
+    return 1
 
 
 def should_consider_forced_reply_mate_candidate(
