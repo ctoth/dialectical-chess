@@ -394,6 +394,28 @@ def test_fork_probe_reasons_include_quality_labels() -> None:
     assert "smt:fork:net:500" in fork_probe.reasons
 
 
+def test_non_smt_threat_reasons_capture_bipolar_support() -> None:
+    board = owned_board_from_fen("r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1")
+
+    fork_probe = next(
+        probe
+        for probe in probe_moves(board, smt_fork=False)
+        if probe.uci == "b5c7"
+    )
+
+    assert "tactical:threat:targets:2:value:500" in fork_probe.reasons
+    assert "fork" not in fork_probe.smt_witnesses
+
+
+def test_moved_piece_en_pris_adds_attack_objection() -> None:
+    board = owned_board_from_fen("4k3/8/8/8/2p5/8/8/N3K3 w - - 0 1")
+
+    exposed = next(probe for probe in probe_moves(board, smt_fork=False) if probe.uci == "a1b3")
+
+    assert "safety:moved_piece_en_pris:320" in exposed.objections
+    assert exposed.score < 0
+
+
 def test_argument_d2_rejects_mined_noisy_fork_when_capture_is_better() -> None:
     board = owned_board_from_fen("3r1rk1/p4pp1/b1p4p/8/BPPq4/P2P3P/2Q3P1/RNB4K b - - 2 27")
 

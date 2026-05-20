@@ -16,6 +16,7 @@ POSITIONAL_REASON_PREFIXES = (
     "outpost:",
     "pawn_structure:",
     "piece_activity:",
+    "piece_safety:",
 )
 TACTICAL_REASON_PREFIXES = (
     "terminal:",

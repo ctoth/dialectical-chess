@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from dialectical_chess.arguments import MoveProbe
-from dialectical_chess.board import OwnedBoard, file_of, piece_color, rank_of, square_index
+from dialectical_chess.board import OwnedBoard, file_of, opposite, piece_color, rank_of, square_index
 from dialectical_chess.search import (
     OWNED_PIECE_VALUE,
     ReplyAnalysisCache,
@@ -95,6 +95,20 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         if promotion_value:
             score += promotion_value
             reasons.append(f"material:promotion:{promotion_value}")
+        if not is_checkmate:
+            safety_reasons, safety_objections, safety_score = moved_piece_safety_labels(
+                board,
+                move,
+                child,
+                captured_value=captured_value,
+                promotion_value=promotion_value,
+            )
+            reasons.extend(safety_reasons)
+            objections.extend(safety_objections)
+            score += safety_score
+            threat_reasons, threat_score = moved_piece_threat_labels(board, move, child)
+            reasons.extend(threat_reasons)
+            score += threat_score
         if settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
@@ -171,6 +185,64 @@ def fork_witness_labels(witness: Any, gives_check: bool) -> tuple[tuple[str, ...
             return tuple(labels), objections, 0
     compatibility = f"smt:fork:{witness.target_count}:{witness.target_value}"
     return (compatibility, *labels), (), max(0, witness.net_value)
+
+
+def moved_piece_safety_labels(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+    *,
+    captured_value: int,
+    promotion_value: int,
+) -> tuple[tuple[str, ...], tuple[str, ...], int]:
+    moved_piece = board.piece_at(move.from_square)
+    if moved_piece is None:
+        return (), (), 0
+    moved_value = OWNED_PIECE_VALUE.get((move.promotion or moved_piece).lower(), 0)
+    if moved_value <= 0:
+        return (), (), 0
+    defended = child.is_square_attacked(move.to_square, opposite(child.turn))
+    en_pris = child.is_square_attacked(move.to_square, child.turn)
+    reasons: list[str] = []
+    objections: list[str] = []
+    score = 0
+    if defended:
+        reasons.append(f"piece_safety:defended:{move.uci()}:{moved_value}")
+        score += 15
+    if en_pris:
+        exchange_gain = captured_value + promotion_value - moved_value
+        if exchange_gain < 0:
+            objections.append(f"safety:moved_piece_en_pris:{moved_value}")
+            score += exchange_gain
+        else:
+            reasons.append(f"material:exchange_nonnegative:{exchange_gain}")
+    return tuple(reasons), tuple(objections), score
+
+
+def moved_piece_threat_labels(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], int]:
+    moved_piece = board.piece_at(move.from_square)
+    if moved_piece is None:
+        return (), 0
+    targets = []
+    for square, piece in enumerate(child.squares):
+        if piece is None or piece_color(piece) != child.turn:
+            continue
+        if moved_piece_attacks_square(child, move.to_square, square, moved_piece):
+            value = OWNED_PIECE_VALUE[piece.lower()]
+            targets.append(value)
+    target_value = sum(targets)
+    if len(targets) < 2 and target_value < 500:
+        return (), 0
+    return (
+        (
+            f"tactical:threat:targets:{len(targets)}:value:{target_value}",
+        ),
+        min(target_value, 700),
+    )
 
 
 def ensure_owned_board(board: Any) -> OwnedBoard:
