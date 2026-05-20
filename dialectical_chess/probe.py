@@ -644,11 +644,11 @@ def should_scan_reply_forced_mate(
 ) -> bool:
     if search_depth not in {1, 2}:
         return False
-    if search_depth == 1:
-        return True
     piece = board.piece_at(move.from_square)
     if piece is None:
         return False
+    if search_depth == 1:
+        return piece.lower() != "p" and has_search_refutation_at_most(objections, -700)
     if piece.lower() == "k":
         return True
     if has_large_search_refutation(objections):
@@ -668,11 +668,15 @@ def should_scan_reply_forced_mate(
 
 
 def has_large_search_refutation(objections: list[str]) -> bool:
+    return has_search_refutation_at_most(objections, -1_000)
+
+
+def has_search_refutation_at_most(objections: list[str], threshold: int) -> bool:
     for objection in objections:
         if not objection.startswith("search_refutes:"):
             continue
         parts = objection.split(":")
-        if len(parts) == 3 and int(parts[2]) <= -1_000:
+        if len(parts) == 3 and int(parts[2]) <= threshold:
             return True
     return False
 
