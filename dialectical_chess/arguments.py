@@ -512,7 +512,7 @@ def extra_defense_copies(reply_attack: str) -> int:
 
 def extra_reply_attack_copies(reply_attack: str) -> int:
     if reply_attack.startswith("reply_mate:"):
-        return 32
+        return 6
     return 0
 
 
