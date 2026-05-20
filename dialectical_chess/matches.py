@@ -59,6 +59,7 @@ def run_uci_match(args: Namespace) -> dict[str, Any]:
             "requested_games": args.match_games,
             "command": command,
         }
+    prepare_match_outputs(args)
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     failures = parse_uci_match_failures(completed.stdout)
     return {
@@ -110,15 +111,29 @@ def build_fastchess_args(args: Namespace, uv_executable: str) -> list[str]:
     ]
     pgn_out = getattr(args, "match_pgn_out", None)
     if pgn_out is not None:
+        pgn_path = match_output_path(pgn_out)
         command.extend(
             [
                 "-pgnout",
-                f"file={Path(pgn_out)}",
+                f"file={pgn_path}",
                 "notation=uci",
                 "append=false",
             ]
         )
     return command
+
+
+def prepare_match_outputs(args: Namespace) -> None:
+    pgn_out = getattr(args, "match_pgn_out", None)
+    if pgn_out is not None:
+        match_output_path(pgn_out).parent.mkdir(parents=True, exist_ok=True)
+
+
+def match_output_path(path: Path | str) -> Path:
+    output_path = Path(path)
+    if output_path.is_absolute():
+        return output_path
+    return PROJECT_ROOT / output_path
 
 
 def dialectical_uci_args(args: Namespace) -> list[str]:

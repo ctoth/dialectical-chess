@@ -3,6 +3,7 @@ from __future__ import annotations
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -12,7 +13,8 @@ from dialectical_chess.loss_mining import (  # noqa: E402
     mine_loss_turning_points,
     reviewed_epd_lines,
 )
-from dialectical_chess.matches import build_fastchess_command  # noqa: E402
+import dialectical_chess.matches as matches  # noqa: E402
+from dialectical_chess.matches import PROJECT_ROOT, build_fastchess_command, prepare_match_outputs  # noqa: E402
 
 
 def test_fastchess_command_can_emit_diagnostic_pgn() -> None:
@@ -40,10 +42,22 @@ def test_fastchess_command_can_emit_diagnostic_pgn() -> None:
     command = build_fastchess_command(args, fastchess="fast-chess", uv_executable="uv")
 
     assert "-pgnout" in command
-    assert "file=scratch\\losses.pgn" in command
+    assert f"file={PROJECT_ROOT / 'scratch' / 'losses.pgn'}" in command
     assert "notation=uci" in command
     assert "append=false" in command
     assert "args=run dialectical-chess-probe --uci --dialectic-depth 2 --search-depth 1 --search-backend alphabeta --selector-mode optimizer --reply-max-replies 64 --reply-max-defense-nodes 1000 --reply-min-defense-material 500 --no-smt-fork" in command
+
+
+def test_prepare_match_outputs_creates_relative_pgn_parent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(matches, "PROJECT_ROOT", tmp_path)
+    args = Namespace(match_pgn_out=Path("scratch/losses.pgn"))
+
+    prepare_match_outputs(args)
+
+    assert (tmp_path / "scratch").is_dir()
 
 
 def test_mines_first_engine_move_that_allows_immediate_mate() -> None:
