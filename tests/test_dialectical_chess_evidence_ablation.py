@@ -938,6 +938,36 @@ def test_low_search_depth_checks_mate_three_for_forced_check_escapes() -> None:
     assert decision.move_uci == "h2g3"
 
 
+def test_low_search_depth_checks_immediate_reply_mate_for_search_refuted_quiet_moves() -> None:
+    board = owned_board_from_fen("2k1r3/2b5/pp3p2/3p1np1/6p1/8/PP1P1PPP/2B3K1 w - - 0 32")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_mate_in_one:d2d3:e8e1" in probes["d2d3"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "d2d3"
+
+
 def test_low_search_depth_checks_forced_reply_mate_for_king_moves() -> None:
     board = owned_board_from_fen("r1b3nr/1p6/1k1Qp3/2p1p1pp/p1B5/P7/1PP2PPP/2KRR3 b - - 1 31")
 

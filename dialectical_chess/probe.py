@@ -187,6 +187,14 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 objections.append(f"search_refutes:{settings.search.backend}:{search_result.score}")
                 objections.append(search_line_label)
             score += search_result.score
+            if (
+                settings.search.depth == 1
+                and search_result.score <= -700
+                and not has_reply_mate_in_one_objection(objections)
+            ):
+                reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
+                objections.extend(reply_mate_objections)
+                score += reply_mate_score
         reply_attacks = bounded_reply_attacks(
             board,
             move,
@@ -222,6 +230,13 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         search_depth=settings.search.depth,
     )
     return sorted(probes, key=lambda probe: (-probe.score, probe.uci))
+
+
+def has_reply_mate_in_one_objection(objections: list[str]) -> bool:
+    return any(
+        objection.startswith("tactical:allows_reply_mate_in_one:")
+        for objection in objections
+    )
 
 
 def remove_supported_premature_minor_check(objections: list[str]) -> int:
