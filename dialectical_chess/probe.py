@@ -148,6 +148,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
             objections.extend(flank_objections)
             score += flank_score
+            escape_reasons, escape_score = king_escape_square_reasons(board, move, child)
+            reasons.extend(escape_reasons)
+            score += escape_score
             if settings.reply_mate_scan and should_scan_reply_mate(
                 settings.search.depth,
                 board,
@@ -297,6 +300,32 @@ def is_direct_tactical_warrant(reason: str) -> bool:
             "search_support:",
         )
     )
+
+
+def king_escape_square_reasons(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() != "p":
+        return (), 0
+    color = piece_color(piece)
+    king_square = board.king_square(color)
+    if not king_adjacent(king_square, move.from_square):
+        return (), 0
+    if child.piece_at(move.from_square) is not None:
+        return (), 0
+    if child.is_square_attacked(move.from_square, opposite(color)):
+        return (), 0
+    return ((f"king_safety:escape_square:{move.uci()}:{square_name(move.from_square)}",), 300)
+
+
+def king_adjacent(left: int, right: int) -> bool:
+    return max(
+        abs(file_of(left) - file_of(right)),
+        abs(rank_of(left) - rank_of(right)),
+    ) == 1
 
 
 def fork_witness_labels(witness: Any, gives_check: bool) -> tuple[tuple[str, ...], tuple[str, ...], int]:

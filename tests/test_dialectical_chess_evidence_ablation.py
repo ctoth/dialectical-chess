@@ -600,6 +600,36 @@ def test_depth_zero_checks_mate_three_when_legal_moves_are_sparse() -> None:
     assert decision.move_uci in {"e2f3", "e2f2", "e2f1", "e2d1", "d4e5"}
 
 
+def test_pawn_move_can_create_king_escape_square() -> None:
+    board = owned_board_from_fen("1R6/3p1kpp/4p3/4Pp2/1Bp5/5B2/5P1P/4K1R1 b - - 0 30")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "king_safety:escape_square:g7g6:g7" in probes["g7g6"].reasons
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "g7g6"
+
+
 def test_argument_selector_rejects_reply_mate_without_search_depth() -> None:
     board = owned_board_from_fen("6nr/n4pp1/k6p/8/3p4/1P6/1PPP1PPP/r1B3K1 w - - 0 22")
 
