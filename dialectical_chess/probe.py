@@ -670,8 +670,6 @@ def scan_forced_reply_mates_for_candidate_moves(
 ) -> list[MoveProbe]:
     if search_depth not in {0, 1, 2}:
         return probes
-    if search_depth == 0 and dialectic_depth != 0:
-        return probes
     if search_depth == 0:
         candidate_limit = 12
     elif search_depth == 1:
