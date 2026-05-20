@@ -107,6 +107,8 @@ def selected_reply_mate_refutation_fixpoint(
     selector_mode: str,
 ) -> tuple[list[MoveProbe], RootArgumentGraph, MoveProbe | None]:
     move_by_uci = {move.uci(): move for move in board.legal_moves()}
+    if not allow_mate_four and len(move_by_uci) > 8:
+        return probes, graph, selected
     refuted: set[str] = set()
     while selected is not None and selected.uci not in refuted:
         objection = selected_reply_mate_refutation(
