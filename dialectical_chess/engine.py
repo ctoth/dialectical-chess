@@ -76,7 +76,7 @@ class DialecticalChessEngine:
         )
         graph = build_root_argument_graph(probes)
         selected = choose_move(probes, graph, selector_mode=self.settings.selector_mode) if probes else None
-        if self.settings.reply_mate_scan:
+        if uses_selected_reply_mate_refutation(self.settings):
             probes, graph, selected = selected_reply_mate_refutation_fixpoint(
                 board,
                 probes,
@@ -124,11 +124,21 @@ def selected_reply_mate_refutation_fixpoint(
     return probes, graph, selected
 
 
+def uses_selected_reply_mate_refutation(settings: EngineSettings) -> bool:
+    return (
+        settings.reply_mate_scan
+        and settings.search_depth == 0
+        and not settings.positional_reasons
+    )
+
+
 def selected_reply_mate_refutation(
     board: Any,
     move_by_uci: dict[str, Any],
     selected: MoveProbe,
 ) -> str | None:
+    if selected.is_checkmate:
+        return None
     if any(objection.startswith("tactical:allows_reply_forced_mate_in_") for objection in selected.objections):
         return None
     move = move_by_uci.get(selected.uci)
