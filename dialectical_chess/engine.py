@@ -103,16 +103,16 @@ def selected_reply_mate_refutation_fixpoint(
     selector_mode: str,
 ) -> tuple[list[MoveProbe], RootArgumentGraph, MoveProbe | None]:
     move_by_uci = {move.uci(): move for move in board.legal_moves()}
+    mate_depths = selected_reply_mate_depths(selector_mode=selector_mode, probes=probes)
     refuted: set[str] = set()
     while selected is not None and selected.uci not in refuted:
-        objection = selected_reply_mate_refutation(board, move_by_uci, selected)
+        objection = selected_reply_mate_refutation(board, move_by_uci, selected, mate_depths=mate_depths)
         if objection is None:
             break
         refuted.add(selected.uci)
         probes = [
             replace(
                 probe,
-                score=probe.score - 100_000,
                 objections=probe.objections + (objection,),
             )
             if probe.uci == selected.uci and objection not in probe.objections
@@ -122,6 +122,16 @@ def selected_reply_mate_refutation_fixpoint(
         graph = build_root_argument_graph(probes)
         selected = choose_move(probes, graph, selector_mode=selector_mode) if probes else None
     return probes, graph, selected
+
+
+def selected_reply_mate_depths(
+    *,
+    selector_mode: str,
+    probes: list[MoveProbe],
+) -> tuple[int, ...]:
+    if selector_mode == "argument" and any(probe.search_score is not None for probe in probes):
+        return (2, 3, 4)
+    return (2, 3)
 
 
 def uses_selected_reply_mate_refutation(settings: EngineSettings) -> bool:
@@ -138,6 +148,8 @@ def selected_reply_mate_refutation(
     board: Any,
     move_by_uci: dict[str, Any],
     selected: MoveProbe,
+    *,
+    mate_depths: tuple[int, ...],
 ) -> str | None:
     if selected.is_checkmate:
         return None
@@ -147,7 +159,7 @@ def selected_reply_mate_refutation(
     if move is None:
         return None
     child = board.apply(move)
-    for mate_depth in (2, 3):
+    for mate_depth in mate_depths:
         if has_forced_mate(child, mate_depth=mate_depth):
             return f"tactical:allows_reply_forced_mate_in_{mate_depth}:{selected.uci}"
     return None
