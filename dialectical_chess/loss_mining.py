@@ -27,8 +27,8 @@ def mine_loss_turning_points(
     engine_name: str,
     mate_depth: int = 1,
 ) -> list[LossTurningPoint]:
-    if mate_depth != 1:
-        raise ValueError("only mate_depth=1 is implemented")
+    if mate_depth < 1:
+        raise ValueError("mate_depth must be at least 1")
     points: list[LossTurningPoint] = []
     stream = io.StringIO(pgn_text)
     game_index = 0
@@ -46,7 +46,7 @@ def mine_loss_turning_points(
             mover = board.turn
             move_uci = move.uci()
             board.push(move)
-            if mover == engine_color and has_immediate_mate(board):
+            if mover == engine_color and has_forced_mate(board, mate_depth=mate_depth):
                 points.append(
                     LossTurningPoint(
                         game_index=game_index,
@@ -55,8 +55,11 @@ def mine_loss_turning_points(
                         played_move=move_uci,
                         side_to_move="w" if engine_color == chess.WHITE else "b",
                         result=game.headers.get("Result", "*"),
-                        reason="allows_mate_in_1",
-                        suggested_avoid_uci=[],
+                        reason=f"allows_mate_in_{mate_depth}",
+                        suggested_avoid_uci=safe_legal_moves(
+                            fen_before,
+                            mate_depth=mate_depth,
+                        ),
                     )
                 )
                 break
@@ -72,12 +75,49 @@ def engine_color_for_loss(game: chess.pgn.Game, engine_name: str) -> bool | None
 
 
 def has_immediate_mate(board: chess.Board) -> bool:
-    for reply in board.legal_moves:
-        child = board.copy(stack=False)
-        child.push(reply)
-        if child.is_checkmate():
+    return has_forced_mate(board, mate_depth=1)
+
+
+def has_forced_mate(board: chess.Board, *, mate_depth: int) -> bool:
+    """Return whether the side to move can force mate within mate_depth moves."""
+    if mate_depth < 1:
+        raise ValueError("mate_depth must be at least 1")
+    if board.is_checkmate():
+        return True
+
+    for move in board.legal_moves:
+        attacker_child = board.copy(stack=False)
+        attacker_child.push(move)
+        if attacker_child.is_checkmate():
+            return True
+        if mate_depth == 1:
+            continue
+        defender_replies = list(attacker_child.legal_moves)
+        if not defender_replies:
+            continue
+        if all(
+            has_forced_mate(defender_child(attacker_child, reply), mate_depth=mate_depth - 1)
+            for reply in defender_replies
+        ):
             return True
     return False
+
+
+def defender_child(board: chess.Board, reply: chess.Move) -> chess.Board:
+    child = board.copy(stack=False)
+    child.push(reply)
+    return child
+
+
+def safe_legal_moves(fen_before: str, *, mate_depth: int) -> list[str]:
+    board = chess.Board(fen_before)
+    safe_moves = []
+    for move in board.legal_moves:
+        child = board.copy(stack=False)
+        child.push(move)
+        if not has_forced_mate(child, mate_depth=mate_depth):
+            safe_moves.append(move.uci())
+    return safe_moves
 
 
 def reviewed_epd_lines(points: list[LossTurningPoint]) -> list[str]:
@@ -85,10 +125,11 @@ def reviewed_epd_lines(points: list[LossTurningPoint]) -> list[str]:
     for point in points:
         epd_position = " ".join(point.fen_before.split()[:4])
         reason = escape_epd_string(point.reason)
-        lines.append(
-            f'{epd_position} am {point.played_move}; '
-            f'id "loss-{point.game_index}-ply-{point.ply}: {reason}";'
-        )
+        fields = [f"am {point.played_move}"]
+        if point.suggested_avoid_uci:
+            fields.append(f"bm {' '.join(point.suggested_avoid_uci)}")
+        fields.append(f'id "loss-{point.game_index}-ply-{point.ply}: {reason}"')
+        lines.append(f"{epd_position} " + "; ".join(fields) + ";")
     return lines
 
 
