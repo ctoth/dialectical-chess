@@ -668,6 +668,8 @@ def should_scan_reply_forced_mate(
         return True
     if has_large_search_refutation(objections):
         return True
+    if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objections, -400):
+        return True
     has_threat_reason = any(
         reason.startswith("tactical:threat:")
         for reason in reasons

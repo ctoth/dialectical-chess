@@ -758,6 +758,36 @@ def test_argument_selector_falls_back_when_grounded_candidates_are_forced_mates(
     assert decision.move_uci == "e7e1"
 
 
+def test_forced_reply_mate_scan_covers_refuted_major_relocations() -> None:
+    board = owned_board_from_fen("r2qk2r/3pB1bp/1p1P2p1/p1p5/2B1Q3/P4N2/1P3PPP/RN4K1 b kq - 0 16")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_2:d8b8" in probes["d8b8"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "d8b8"
+
+
 def test_low_search_depth_checks_forced_reply_mate_in_two_for_candidates() -> None:
     board = owned_board_from_fen("5knr/2Bp2pp/8/1B2N3/4b3/2P5/4NPPP/R5K1 b - - 0 20")
 
