@@ -159,13 +159,15 @@ def settings_for_go(settings: EngineSettings, board, command: str) -> EngineSett
     if remaining is None:
         return settings
     search_depth = settings.search_depth
+    selector_mode = settings.selector_mode
     if remaining <= 2_000:
         search_depth = min(search_depth, 0)
+        selector_mode = "score"
     elif remaining <= 7_000:
         search_depth = min(search_depth, 1)
-    if search_depth == settings.search_depth:
+    if search_depth == settings.search_depth and selector_mode == settings.selector_mode:
         return settings
-    return replace(settings, search_depth=search_depth)
+    return replace(settings, search_depth=search_depth, selector_mode=selector_mode)
 
 
 def own_remaining_ms(board, command: str) -> int | None:
