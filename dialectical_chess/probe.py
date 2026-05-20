@@ -278,8 +278,6 @@ def unsupported_major_drift_objections(
         return (), 0
     if any(is_direct_tactical_warrant(reason) for reason in reasons):
         return (), 0
-    if any(reason.startswith("file_control:") for reason in reasons):
-        return (), 0
     return ((f"strategy:unsupported_major_drift:{move.uci()}",), -300)
 
 
