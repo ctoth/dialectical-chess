@@ -416,6 +416,30 @@ def test_moved_piece_en_pris_adds_attack_objection() -> None:
     assert exposed.score < 0
 
 
+def test_pawn_only_multi_threat_is_not_tactical_support() -> None:
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+
+    queen_probe = next(probe for probe in probe_moves(board, smt_fork=False) if probe.uci == "d1g4")
+
+    assert "tactical:threat:targets:2:value:200" not in queen_probe.reasons
+
+
+def test_early_queen_excursion_gets_opening_objection() -> None:
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
+
+    assert "opening:premature_queen:d1g4:undeveloped_minors:4" in probes["d1g4"].objections
+    assert probes["d1g4"].score < probes["g1f3"].score
+
+
+def test_black_early_queen_excursion_gets_opening_objection() -> None:
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2")
+    probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
+
+    assert "opening:premature_queen:d8f6:undeveloped_minors:4" in probes["d8f6"].objections
+    assert probes["d8f6"].score < probes["g8f6"].score
+
+
 def test_argument_d2_rejects_mined_noisy_fork_when_capture_is_better() -> None:
     board = owned_board_from_fen("3r1rk1/p4pp1/b1p4p/8/BPPq4/P2P3P/2Q3P1/RNB4K b - - 2 27")
 

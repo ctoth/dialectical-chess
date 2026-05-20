@@ -109,6 +109,14 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             threat_reasons, threat_score = moved_piece_threat_labels(board, move, child)
             reasons.extend(threat_reasons)
             score += threat_score
+            opening_objections, opening_score = opening_development_objections(
+                board,
+                move,
+                captured_value=captured_value,
+                gives_check=gives_check,
+            )
+            objections.extend(opening_objections)
+            score += opening_score
         if settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
@@ -235,13 +243,51 @@ def moved_piece_threat_labels(
             value = OWNED_PIECE_VALUE[piece.lower()]
             targets.append(value)
     target_value = sum(targets)
-    if len(targets) < 2 and target_value < 500:
+    if target_value < 500:
         return (), 0
     return (
         (
             f"tactical:threat:targets:{len(targets)}:value:{target_value}",
         ),
         min(target_value, 700),
+    )
+
+
+def opening_development_objections(
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int,
+    gives_check: bool,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() != "q":
+        return (), 0
+    color = piece_color(piece)
+    if board.fullmove_number > 10:
+        return (), 0
+    undeveloped_minors = undeveloped_minor_count(board, color)
+    if undeveloped_minors < 2:
+        return (), 0
+    if captured_value >= OWNED_PIECE_VALUE["n"] or gives_check:
+        return (), 0
+    return (
+        (f"opening:premature_queen:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
+        -300,
+    )
+
+
+def undeveloped_minor_count(board: OwnedBoard, color: str) -> int:
+    home_squares = (
+        ("b1", "g1", "c1", "f1")
+        if color == "w"
+        else ("b8", "g8", "c8", "f8")
+    )
+    expected = ("N", "N", "B", "B") if color == "w" else ("n", "n", "b", "b")
+    return sum(
+        1
+        for square, piece in zip(home_squares, expected, strict=True)
+        if board.piece_at(square) == piece
     )
 
 
