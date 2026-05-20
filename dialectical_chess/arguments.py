@@ -262,10 +262,10 @@ def material_or_promotion_gain(probe: MoveProbe) -> int:
 
 
 def severe_objection_count(probe: MoveProbe) -> int:
-    return sum(severe_objection_weight(objection) for objection in probe.objections)
+    return sum(severe_objection_weight(objection, probe) for objection in probe.objections)
 
 
-def severe_objection_weight(objection: str) -> int:
+def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> int:
     if is_forced_mate_refutation(objection):
         return 3
     if is_large_search_refutation(objection):
@@ -275,6 +275,8 @@ def severe_objection_weight(objection: str) -> int:
     if objection.startswith("safety:queen_blunder:"):
         return 2
     if is_moved_minor_or_major_en_pris(objection):
+        if probe is not None and has_compensating_tactical_pressure(probe):
+            return 0
         return 1
     if objection.startswith("king_safety:queen_flank_invasion:"):
         return 2
@@ -322,6 +324,23 @@ def is_moved_minor_or_major_en_pris(objection: str) -> bool:
     except ValueError:
         return False
     return value >= 300
+
+
+def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
+    return any(tactical_threat_value(reason) >= 500 for reason in probe.reasons)
+
+
+def tactical_threat_value(reason: str) -> int:
+    prefix = "tactical:threat:targets:"
+    if not reason.startswith(prefix):
+        return 0
+    parts = reason.split(":")
+    if len(parts) != 6 or parts[4] != "value":
+        return 0
+    try:
+        return int(parts[5])
+    except ValueError:
+        return 0
 
 
 def is_positional_reason(reason: str) -> bool:
