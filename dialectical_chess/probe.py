@@ -147,6 +147,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 board,
                 move,
                 captured_value=captured_value,
+                reasons=reasons,
                 objections=objections,
             ):
                 reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
@@ -550,6 +551,7 @@ def should_scan_reply_mate(
     move: Any,
     *,
     captured_value: int,
+    reasons: list[str],
     objections: list[str],
 ) -> bool:
     if search_depth == 0:
@@ -560,6 +562,11 @@ def should_scan_reply_mate(
     if piece is not None and piece.lower() == "k":
         return True
     if captured_value >= OWNED_PIECE_VALUE["n"]:
+        return True
+    if piece is not None and piece.lower() in {"q", "r"} and any(
+        reason.startswith("tactical:threat:")
+        for reason in reasons
+    ):
         return True
     return any(
         objection.startswith("king_safety:")
