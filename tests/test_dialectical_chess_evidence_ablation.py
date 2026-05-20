@@ -2315,6 +2315,35 @@ def test_low_clock_positive_rook_move_gets_forced_mate_depth_three_objection() -
     }
 
 
+def test_low_clock_ignores_soft_piece_safety_when_mate_net_has_safe_quiet_moves() -> None:
+    board = owned_board_from_fen("r3k2r/3n1pp1/2b1p2p/2p5/3bqP2/n4RB1/3K2PP/3Q3R w kq - 0 28")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            dialectic_depth=2,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+            positional_reasons=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci in {
+        "f3d3",
+        "f3c3",
+        "f3a3",
+        "d2c1",
+        "d1a4",
+        "d1b3",
+        "d1e2",
+        "d1c2",
+        "d1f1",
+        "d1c1",
+        "d1b1",
+    }
+
+
 def test_checking_knight_fork_gets_en_pris_objection_when_queen_can_capture() -> None:
     board = owned_board_from_fen("r1bqk2r/ppppn1pp/3bpp2/8/1nBPP3/P1N2N2/1PP1QPPP/R1B1K2R b KQkq - 0 7")
 
