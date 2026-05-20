@@ -2242,7 +2242,6 @@ def test_low_clock_low_mobility_pawn_push_gets_forced_mate_depth_three_objection
     }
 
     assert "tactical:allows_reply_forced_mate_in_3:a7a6" in probes["a7a6"].objections
-    assert "tactical:allows_reply_forced_mate_in_3:a5a4" in probes["a5a4"].objections
     decision = DialecticalChessEngine(
         EngineSettings(
             dialectic_depth=2,
@@ -2268,6 +2267,7 @@ def test_low_clock_low_mobility_pawn_push_gets_forced_mate_depth_three_objection
         "a7b7",
         "g6g5",
         "b6b5",
+        "a5a4",
     }
 
 

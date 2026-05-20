@@ -29,6 +29,9 @@ from dialectical_chess.smt import (
 )
 
 
+DEPTH_ZERO_MATE_THREE_LOW_MOBILITY_LIMIT = 16
+
+
 @dataclass(frozen=True)
 class ProbeSettings:
     dialectic_depth: int = 1
@@ -744,7 +747,10 @@ def scan_forced_reply_mates_for_candidate_moves(
         and legal_move_count <= 2
         and board.in_check(board.turn)
     )
-    scan_depth_zero_low_mobility_mate_three = search_depth == 0 and legal_move_count <= 8
+    scan_depth_zero_low_mobility_mate_three = (
+        search_depth == 0
+        and legal_move_count <= DEPTH_ZERO_MATE_THREE_LOW_MOBILITY_LIMIT
+    )
     updated: dict[str, MoveProbe] = {}
     scanned: set[str] = set()
     scan_budget = candidate_limit * 3 if search_depth == 1 else candidate_limit
