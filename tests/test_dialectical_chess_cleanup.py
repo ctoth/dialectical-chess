@@ -65,7 +65,7 @@ def test_uci_loop_keeps_recent_own_move_across_fen_only_updates(monkeypatch) -> 
     assert output_stream.getvalue().splitlines() == ["bestmove a5c6", "bestmove c6a5"]
 
 
-def test_low_clock_keeps_dialectical_evidence_enabled() -> None:
+def test_critical_clock_disables_expensive_dialectical_evidence() -> None:
     pytest.importorskip("chess")
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
@@ -79,10 +79,11 @@ def test_low_clock_keeps_dialectical_evidence_enabled() -> None:
     )
 
     assert settings.search_depth == 0
+    assert settings.dialectic_depth == 0
     assert settings.smt_mate is False
     assert settings.smt_fork is False
     assert settings.positional_reasons is False
-    assert settings.reply_mate_scan is True
+    assert settings.reply_mate_scan is False
 
 
 def test_epd_parses_best_and_avoid_moves() -> None:
