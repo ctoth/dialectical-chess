@@ -163,6 +163,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         if search_result is not None:
             search_line_label = "search_line:" + "-".join(search_result.line)
             if search_result.score > 0:
+                removed_opening_objections = remove_supported_premature_minor_check(objections)
+                if removed_opening_objections:
+                    score += 900 * removed_opening_objections
                 reasons.append(f"search:{settings.search.backend}:{search_result.score}")
                 reasons.append(f"search_support:{settings.search.backend}:{search_result.score}")
                 reasons.append(search_line_label)
@@ -200,6 +203,18 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             )
         )
     return sorted(probes, key=lambda probe: (-probe.score, probe.uci))
+
+
+def remove_supported_premature_minor_check(objections: list[str]) -> int:
+    kept = [
+        objection
+        for objection in objections
+        if not objection.startswith("opening:premature_minor_check:")
+    ]
+    removed = len(objections) - len(kept)
+    if removed:
+        objections[:] = kept
+    return removed
 
 
 def fork_witness_labels(witness: Any, gives_check: bool) -> tuple[tuple[str, ...], tuple[str, ...], int]:

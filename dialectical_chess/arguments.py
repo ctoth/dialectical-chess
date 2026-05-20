@@ -286,11 +286,14 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
         or objection.startswith("opening:king_center_flight:")
         or objection.startswith("opening:premature_queen:")
         or objection.startswith("opening:premature_rook:")
-        or objection.startswith("opening:premature_minor_check:")
         or objection.startswith("opening:minor_retreat:")
         or objection.startswith("king_safety:flank_pawn_weakening:")
         or objection.startswith("king_safety:castled_flank_pawn_weakening:")
     ):
+        return 1
+    if objection.startswith("opening:premature_minor_check:"):
+        if probe is not None and has_search_support(probe):
+            return 0
         return 1
     return 0
 
@@ -331,6 +334,10 @@ def is_moved_minor_or_major_en_pris(objection: str) -> bool:
 
 def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
     return any(tactical_threat_value(reason) >= COMPENSATING_TACTICAL_THREAT_THRESHOLD for reason in probe.reasons)
+
+
+def has_search_support(probe: MoveProbe) -> bool:
+    return any(reason.startswith("search_support:") for reason in probe.reasons)
 
 
 def tactical_threat_value(reason: str) -> int:
