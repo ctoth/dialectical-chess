@@ -220,6 +220,23 @@ def test_argument_selector_rejects_hanging_checking_minor_move() -> None:
     assert decision.move_uci != "c4b5"
 
 
+def test_argument_selector_requires_strong_compensation_for_hanging_minor() -> None:
+    board = owned_board_from_fen("rn2kbnr/1bpp1pp1/pp2pq2/7p/2BNP2p/2N5/PPPP1PPP/R1BQ1RK1 w kq - 1 8")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "e4e5"
+
+
 def test_opening_king_walk_gets_safety_objection() -> None:
     board = owned_board_from_fen("r2qk1nr/ppp2ppp/2nbb3/1B6/8/2N5/PPPP1PPP/R1BQK1NR w KQkq - 4 6")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

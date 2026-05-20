@@ -29,6 +29,7 @@ TACTICAL_REASON_PREFIXES = (
 )
 POSITIONAL_SCORE_BONUS = 25
 LARGE_SEARCH_REFUTATION_THRESHOLD = -500
+COMPENSATING_TACTICAL_THREAT_THRESHOLD = 700
 
 
 @dataclass(frozen=True)
@@ -327,7 +328,7 @@ def is_moved_minor_or_major_en_pris(objection: str) -> bool:
 
 
 def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
-    return any(tactical_threat_value(reason) >= 500 for reason in probe.reasons)
+    return any(tactical_threat_value(reason) >= COMPENSATING_TACTICAL_THREAT_THRESHOLD for reason in probe.reasons)
 
 
 def tactical_threat_value(reason: str) -> int:
