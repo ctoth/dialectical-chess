@@ -306,7 +306,10 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
     if objection.startswith("safety:ignored_hanging_piece:"):
         return 1
     if is_moved_minor_or_major_en_pris(objection):
-        if probe is not None and has_compensating_tactical_pressure(probe):
+        if probe is not None and (
+            has_compensating_tactical_pressure(probe)
+            or has_forcing_material_gain(probe)
+        ):
             return 0
         return 1
     if objection.startswith("king_safety:queen_flank_invasion:"):
@@ -373,6 +376,10 @@ def has_compensating_forcing_pressure(probe: MoveProbe) -> bool:
     return has_compensating_tactical_pressure(probe) and (
         probe.gives_check or material_or_promotion_gain(probe) > 0
     )
+
+
+def has_forcing_material_gain(probe: MoveProbe) -> bool:
+    return probe.gives_check and material_or_promotion_gain(probe) > 0
 
 
 def has_search_support(probe: MoveProbe) -> bool:

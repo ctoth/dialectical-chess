@@ -1672,6 +1672,36 @@ def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:
     assert decision.move_uci == "e4g2"
 
 
+def test_forcing_capture_compensates_moved_piece_en_pris_objection() -> None:
+    board = owned_board_from_fen("3r4/5ppk/4pn2/2R4p/P4b2/1PP5/4b1PP/7K w - - 6 40")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "safety:moved_piece_en_pris:500" in probes["c5h5"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "c5h5"
+
+
 def test_non_mating_queen_check_still_gets_opening_objection() -> None:
     board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/8/p2P4/8/2N5/PPP2PPP/R1BQKBNR b KQkq - 0 5")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
