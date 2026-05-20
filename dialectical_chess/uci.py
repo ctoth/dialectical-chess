@@ -60,7 +60,9 @@ def run_uci(
             recent_own_move = None
         elif command.startswith("position "):
             try:
-                board, recent_own_move = parse_uci_position_state(command)
+                board, parsed_recent_own_move = parse_uci_position_state(command)
+                if parsed_recent_own_move is not None or "moves" in command.split():
+                    recent_own_move = parsed_recent_own_move
             except ValueError as exc:
                 _uci_write(output_stream, f"info string invalid position: {exc}")
         elif command.startswith("go") or command == "stop":
@@ -69,10 +71,10 @@ def run_uci(
                 board,
                 command,
             )
-            _uci_write(
-                output_stream,
-                "bestmove " + choose_uci_move(board, settings=move_settings, output_stream=output_stream),
-            )
+            chosen_move = choose_uci_move(board, settings=move_settings, output_stream=output_stream)
+            if chosen_move != "0000":
+                recent_own_move = chosen_move
+            _uci_write(output_stream, "bestmove " + chosen_move)
         elif command == "quit":
             return 0
         elif command.startswith("setoption ") or command == "ponderhit":
