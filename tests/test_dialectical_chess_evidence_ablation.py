@@ -2354,6 +2354,47 @@ def test_selected_low_clock_move_is_reranked_when_forced_mate_refutes_it() -> No
     }
 
 
+def test_selected_shallow_search_move_is_reranked_when_forced_mate_refutes_it() -> None:
+    board = owned_board_from_fen("r1b3r1/ppNpnk1p/3P1ppP/B3p3/4P3/4KN2/4B1P1/R6R b - - 0 23")
+
+    analysis = DialecticalChessEngine(
+        EngineSettings(
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+            positional_reasons=True,
+        )
+    ).analyze(board)
+
+    refuted = {
+        probe.uci
+        for probe in analysis.probes
+        if any(
+            objection.startswith("tactical:allows_reply_forced_mate_in_")
+            for objection in probe.objections
+        )
+    }
+
+    assert "e7c6" in refuted
+    assert analysis.decision.move_uci in {
+        "g8h8",
+        "g8e8",
+        "g8d8",
+        "g8g7",
+        "a8b8",
+        "f7f8",
+        "e7f5",
+        "e7d5",
+        "b7b6",
+        "a7a6",
+        "g6g5",
+        "f6f5",
+        "b7b5",
+    }
+
+
 def test_checking_knight_fork_gets_en_pris_objection_when_queen_can_capture() -> None:
     board = owned_board_from_fen("r1bqk2r/ppppn1pp/3bpp2/8/1nBPP3/P1N2N2/1PP1QPPP/R1B1K2R b KQkq - 0 7")
 
