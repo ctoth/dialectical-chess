@@ -572,8 +572,9 @@ def scan_forced_reply_mates_for_candidate_moves(
     *,
     search_depth: int,
 ) -> list[MoveProbe]:
-    if search_depth != 2:
+    if search_depth not in {1, 2}:
         return probes
+    mate_depth = 2 if search_depth == 1 else 3
     move_by_uci = {move.uci(): move for move in legal_moves}
     updated: dict[str, MoveProbe] = {}
     for probe in sorted(probes, key=lambda candidate: (-candidate.score, candidate.uci))[:12]:
@@ -583,13 +584,13 @@ def scan_forced_reply_mates_for_candidate_moves(
             board,
             move,
             reasons=list(probe.reasons),
-            objections=list(probe.objections),
-        ):
+                objections=list(probe.objections),
+            ):
             continue
         forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
             board.apply(move),
             move,
-            mate_depth=3,
+            mate_depth=mate_depth,
         )
         if not forced_mate_objections:
             continue
@@ -641,8 +642,10 @@ def should_scan_reply_forced_mate(
     reasons: list[str],
     objections: list[str],
 ) -> bool:
-    if search_depth != 2:
+    if search_depth not in {1, 2}:
         return False
+    if search_depth == 1:
+        return True
     piece = board.piece_at(move.from_square)
     if piece is None:
         return False
