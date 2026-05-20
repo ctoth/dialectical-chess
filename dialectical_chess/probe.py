@@ -779,6 +779,8 @@ def should_scan_reply_forced_mate(
 ) -> bool:
     if search_depth not in {0, 1, 2}:
         return False
+    if has_search_refuted_overreach(objections) and not has_large_search_refutation(objections):
+        return False
     piece = board.piece_at(move.from_square)
     if piece is None:
         return False
@@ -849,6 +851,13 @@ def has_material_capture_at_least(reasons: list[str], threshold: int) -> bool:
 
 def has_tactical_threat_at_least(reasons: list[str], threshold: int) -> bool:
     return any(tactical_threat_value(reason) >= threshold for reason in reasons)
+
+
+def has_search_refuted_overreach(objections: list[str]) -> bool:
+    return any(
+        objection.startswith("tactical:search_refuted_overreach:")
+        for objection in objections
+    )
 
 
 def king_ring_attack_count(board: OwnedBoard) -> int:
