@@ -275,6 +275,31 @@ def test_argument_selector_rejects_search_proven_forced_mate() -> None:
     assert decision.move_uci == "f2f1"
 
 
+def test_queen_flank_invasion_gets_king_safety_objection() -> None:
+    board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
+    probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
+
+    assert "king_safety:queen_flank_invasion:g8f6:g7" in probes["g8f6"].objections
+    assert probes["g8f6"].score < probes["g7g6"].score
+
+
+def test_argument_selector_rejects_queen_flank_invasion() -> None:
+    board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "g8f6"
+
+
 @pytest.mark.parametrize(
     ("puzzle_id", "fen", "expected_uci"),
     [

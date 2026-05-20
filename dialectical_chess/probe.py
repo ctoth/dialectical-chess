@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from dialectical_chess.arguments import MoveProbe
-from dialectical_chess.board import OwnedBoard, file_of, opposite, piece_color, rank_of, square_index
+from dialectical_chess.board import OwnedBoard, file_of, opposite, piece_color, rank_of, square_index, square_name
 from dialectical_chess.search import (
     OWNED_PIECE_VALUE,
     ReplyAnalysisCache,
@@ -121,6 +121,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             king_objections, king_score = opening_king_safety_objections(board, move)
             objections.extend(king_objections)
             score += king_score
+            flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
+            objections.extend(flank_objections)
+            score += flank_score
         if settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
@@ -322,6 +325,36 @@ def opening_king_safety_objections(
     if board.in_check(color):
         return (), 0
     return ((f"opening:king_walk:{move.uci()}",), -400)
+
+
+def queen_flank_invasion_objections(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], int]:
+    color = piece_color(board.piece_at(move.from_square) or ("P" if board.turn == "w" else "p"))
+    vulnerable = king_flank_pawn_squares(color)
+    labels: list[str] = []
+    for reply in child.legal_moves():
+        reply_piece = child.piece_at(reply.from_square)
+        captured = child.piece_at(reply.to_square)
+        if (
+            reply_piece is not None
+            and reply_piece.lower() == "q"
+            and captured is not None
+            and captured.lower() == "p"
+            and reply.to_square in vulnerable
+        ):
+            labels.append(f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(reply.to_square)}")
+    if not labels:
+        return (), 0
+    return tuple(sorted(set(labels))), -1_000
+
+
+def king_flank_pawn_squares(color: str) -> frozenset[int]:
+    if color == "w":
+        return frozenset({square_index("g2"), square_index("h2")})
+    return frozenset({square_index("g7"), square_index("h7")})
 
 
 def ensure_owned_board(board: Any) -> OwnedBoard:
