@@ -773,6 +773,7 @@ def scan_forced_reply_mates_for_candidate_moves(
                 search_depth=search_depth,
                 scan_depth_one_mate_three=scan_depth_one_mate_three,
                 scan_depth_zero_low_mobility_mate_three=scan_depth_zero_low_mobility_mate_three,
+                legal_move_count=legal_move_count,
             )
             child = board.apply(move)
             forced_mate_objections: tuple[str, ...] = ()
@@ -870,6 +871,7 @@ def forced_reply_mate_depths(
     search_depth: int,
     scan_depth_one_mate_three: bool,
     scan_depth_zero_low_mobility_mate_three: bool,
+    legal_move_count: int,
 ) -> tuple[int, ...]:
     if scan_depth_one_mate_three:
         return (2, 3)
@@ -877,7 +879,11 @@ def forced_reply_mate_depths(
         return (2, 3)
     if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
         return (2, 3)
-    if search_depth == 1 and has_search_refutation_at_most(list(probe.objections), -700):
+    if (
+        search_depth == 1
+        and legal_move_count <= 20
+        and has_search_refutation_at_most(list(probe.objections), -700)
+    ):
         return (2, 3)
     if search_depth in {0, 1}:
         return (2,)
@@ -968,7 +974,11 @@ def should_scan_reply_forced_mate(
             and has_search_refutation_at_most(objections, -700)
         ):
             return True
-        if has_search_refutation_at_most(objections, -700):
+        if (
+            legal_move_count is not None
+            and legal_move_count <= 20
+            and has_search_refutation_at_most(objections, -700)
+        ):
             return True
         has_threat_reason = any(
             reason.startswith("tactical:threat:")
