@@ -735,7 +735,7 @@ def scan_forced_reply_mates_for_candidate_moves(
     if search_depth not in {0, 1, 2}:
         return probes
     if search_depth == 0:
-        candidate_limit = 12
+        candidate_limit = 2
     elif search_depth == 1:
         candidate_limit = 6
     else:
@@ -881,7 +881,7 @@ def forced_reply_mate_depths(
 ) -> tuple[int, ...]:
     if scan_depth_one_mate_three:
         return (2, 3)
-    if scan_depth_zero_low_mobility_mate_three:
+    if scan_depth_zero_low_mobility_mate_three and probe.score > 0:
         return (2, 3)
     if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
         return (2, 3)
