@@ -68,9 +68,6 @@ def choose_move(
 ) -> MoveProbe:
     if not probes:
         raise SystemExit("position has no legal moves")
-    checkmates = [probe for probe in probes if probe.is_checkmate]
-    if checkmates:
-        return sorted(checkmates, key=score_selection_key)[0]
     if selector_mode not in SELECTOR_MODES:
         raise ValueError(f"unknown selector_mode: {selector_mode}")
     graph = graph or build_root_argument_graph(probes)
@@ -105,12 +102,6 @@ def argument_selection_candidates(probes: list[MoveProbe], graph: RootArgumentGr
     candidates = grounded_candidates(probes, graph)
     if any(has_forced_mate_refutation(probe) for probe in candidates):
         return probes
-    if any(has_forced_mate_refutation(probe) for probe in probes):
-        expanded = {probe.uci: probe for probe in candidates}
-        for probe in probes:
-            if has_compensating_tactical_pressure(probe):
-                expanded.setdefault(probe.uci, probe)
-        return list(expanded.values())
     return candidates
 
 
