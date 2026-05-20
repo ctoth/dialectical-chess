@@ -878,6 +878,36 @@ def test_low_search_depth_checks_forced_reply_mate_for_king_moves() -> None:
     assert decision.move_uci != "b6a5"
 
 
+def test_low_search_depth_checks_forced_reply_mate_for_refuted_queen_moves() -> None:
+    board = owned_board_from_fen("3rk2r/4qppp/2p2n2/2b5/5PQ1/3b4/PP1PN1PP/R1B2K1R w k - 4 16")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_2:g4h4" in probes["g4h4"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "g4h4"
+
+
 def test_uncastled_flank_pawn_push_gets_king_safety_objection() -> None:
     board = owned_board_from_fen("r3k1nr/5ppp/p7/2b2q2/PnP2P2/1Q1p4/1P1P2PP/R1B1K1NR w KQkq - 2 14")
     probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}
