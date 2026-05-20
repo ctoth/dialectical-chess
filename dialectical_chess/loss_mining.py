@@ -83,12 +83,12 @@ def has_forced_mate(board: chess.Board, *, mate_depth: int) -> bool:
     """Return whether the side to move can force mate within mate_depth moves."""
     if mate_depth < 1:
         raise ValueError("mate_depth must be at least 1")
-    return _has_forced_mate_fen(board.fen(), mate_depth)
+    return _has_forced_mate_position(position_key(board), mate_depth)
 
 
 @lru_cache(maxsize=100_000)
-def _has_forced_mate_fen(fen: str, mate_depth: int) -> bool:
-    board = chess.Board(fen)
+def _has_forced_mate_position(position: str, mate_depth: int) -> bool:
+    board = chess.Board(f"{position} 0 1")
     if board.is_checkmate():
         return True
 
@@ -103,11 +103,19 @@ def _has_forced_mate_fen(fen: str, mate_depth: int) -> bool:
         if not defender_replies:
             continue
         if all(
-            _has_forced_mate_fen(defender_child(attacker_child, reply).fen(), mate_depth - 1)
+            _has_forced_mate_position(
+                position_key(defender_child(attacker_child, reply)),
+                mate_depth - 1,
+            )
             for reply in defender_replies
         ):
             return True
     return False
+
+
+def position_key(board: chess.Board) -> str:
+    """Cache key for legal move generation: board, turn, castling, en passant."""
+    return " ".join(board.fen().split()[:4])
 
 
 def defender_child(board: chess.Board, reply: chess.Move) -> chess.Board:
