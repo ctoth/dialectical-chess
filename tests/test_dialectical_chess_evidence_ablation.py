@@ -1642,6 +1642,36 @@ def test_unsupported_major_drift_rejects_mined_queen_shuffle() -> None:
     assert decision.move_uci != "b6b7"
 
 
+def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:
+    board = owned_board_from_fen("3k2nr/4b2p/1p1pppp1/pQ6/P3q2P/4B2N/1P3PP1/2R2RK1 b - - 1 25")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "safety:queen_blunder:e4g2:800" in probes["e4g2"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "e4g2"
+
+
 def test_non_mating_queen_check_still_gets_opening_objection() -> None:
     board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/8/p2P4/8/2N5/PPP2PPP/R1BQKBNR b KQkq - 0 5")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

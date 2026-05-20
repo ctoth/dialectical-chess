@@ -300,6 +300,8 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
     if objection.startswith("tactical:allows_reply_forced_mate_in_"):
         return 3
     if objection.startswith("safety:queen_blunder:"):
+        if probe is not None and has_compensating_forcing_pressure(probe):
+            return 0
         return 2
     if objection.startswith("safety:ignored_hanging_piece:"):
         return 1
@@ -365,6 +367,12 @@ def is_moved_minor_or_major_en_pris(objection: str) -> bool:
 
 def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
     return any(tactical_threat_value(reason) >= COMPENSATING_TACTICAL_THREAT_THRESHOLD for reason in probe.reasons)
+
+
+def has_compensating_forcing_pressure(probe: MoveProbe) -> bool:
+    return has_compensating_tactical_pressure(probe) and (
+        probe.gives_check or material_or_promotion_gain(probe) > 0
+    )
 
 
 def has_search_support(probe: MoveProbe) -> bool:
