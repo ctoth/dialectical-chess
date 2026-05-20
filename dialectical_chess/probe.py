@@ -283,7 +283,7 @@ def opening_development_objections(
     undeveloped_minors = undeveloped_minor_count(board, color)
     if undeveloped_minors < 2:
         return (), 0
-    if captured_value >= OWNED_PIECE_VALUE["n"] or gives_check:
+    if captured_value >= OWNED_PIECE_VALUE["n"]:
         return (), 0
     if kind == "r" and captured_value == 0:
         return (
@@ -294,7 +294,7 @@ def opening_development_objections(
         return (), 0
     return (
         (f"opening:premature_queen:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
-        -300,
+        -1_200,
     )
 
 

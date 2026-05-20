@@ -636,6 +636,14 @@ def test_black_early_queen_excursion_gets_opening_objection() -> None:
     assert probes["d8f6"].score < probes["g8f6"].score
 
 
+def test_non_mating_queen_check_still_gets_opening_objection() -> None:
+    board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/8/p2P4/8/2N5/PPP2PPP/R1BQKBNR b KQkq - 0 5")
+    probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
+
+    assert "opening:premature_queen:d8e7:undeveloped_minors:3" in probes["d8e7"].objections
+    assert probes["d8e7"].score < probes["g8f6"].score
+
+
 def test_argument_d2_rejects_mined_noisy_fork_when_capture_is_better() -> None:
     board = owned_board_from_fen("3r1rk1/p4pp1/b1p4p/8/BPPq4/P2P3P/2Q3P1/RNB4K b - - 2 27")
 
