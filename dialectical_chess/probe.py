@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
+import chess
+
 from dialectical_chess.arguments import MoveProbe
-from dialectical_chess.board import OwnedBoard, file_of, piece_color, rank_of, square_index
+from dialectical_chess.board import OwnedBoard, file_of, opposite, piece_color, rank_of, square_index, square_name
+from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.search import (
     OWNED_PIECE_VALUE,
     ReplyAnalysisCache,
@@ -33,6 +36,8 @@ class ProbeSettings:
     reply_analysis: ReplyAnalysisSettings = field(default_factory=ReplyAnalysisSettings)
     smt: SmtSettings = field(default_factory=SmtSettings)
     positional_reasons: bool = True
+    reply_mate_scan: bool = True
+    recent_own_move: str | None = None
 
 
 def probe_moves(
@@ -44,7 +49,9 @@ def probe_moves(
     smt_mate: bool = True,
     smt_fork: bool = True,
     positional_reasons: bool = True,
+    reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
+    recent_own_move: str | None = None,
 ) -> list[MoveProbe]:
     settings = ProbeSettings(
         dialectic_depth=dialectic_depth,
@@ -52,6 +59,8 @@ def probe_moves(
         reply_analysis=reply_analysis or ReplyAnalysisSettings(),
         smt=SmtSettings(mate_in_one=smt_mate, fork=smt_fork),
         positional_reasons=positional_reasons,
+        reply_mate_scan=reply_mate_scan,
+        recent_own_move=recent_own_move,
     )
     return probe_moves_with_settings(board, settings)
 
@@ -95,6 +104,76 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         if promotion_value:
             score += promotion_value
             reasons.append(f"material:promotion:{promotion_value}")
+        if not is_checkmate:
+            safety_reasons, safety_objections, safety_score = moved_piece_safety_labels(
+                board,
+                move,
+                child,
+                captured_value=captured_value,
+                gives_check=gives_check,
+                promotion_value=promotion_value,
+            )
+            reasons.extend(safety_reasons)
+            objections.extend(safety_objections)
+            score += safety_score
+            threat_reasons, threat_score = moved_piece_threat_labels(board, move, child)
+            reasons.extend(threat_reasons)
+            score += threat_score
+            opening_objections, opening_score = opening_development_objections(
+                board,
+                move,
+                captured_value=captured_value,
+                gives_check=gives_check,
+            )
+            objections.extend(opening_objections)
+            score += opening_score
+            minor_retreat_objections, minor_retreat_score = opening_minor_retreat_objections(
+                board,
+                move,
+                captured_value=captured_value,
+                gives_check=gives_check,
+            )
+            objections.extend(minor_retreat_objections)
+            score += minor_retreat_score
+            king_objections, king_score = opening_king_safety_objections(
+                board,
+                move,
+                captured_value=captured_value,
+            )
+            objections.extend(king_objections)
+            score += king_score
+            flank_pawn_objections, flank_pawn_score = flank_pawn_weakening_objections(board, move)
+            objections.extend(flank_pawn_objections)
+            score += flank_pawn_score
+            flank_response_reasons, flank_unanswered_objections, flank_response_score = advanced_flank_pawn_response_labels(
+                board,
+                move,
+                child,
+            )
+            reasons.extend(flank_response_reasons)
+            objections.extend(flank_unanswered_objections)
+            score += flank_response_score
+            ignored_objections, ignored_score = ignored_hanging_piece_objections(board, move, child)
+            objections.extend(ignored_objections)
+            score += ignored_score
+            flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
+            objections.extend(flank_objections)
+            score += flank_score
+            if settings.positional_reasons:
+                escape_reasons, escape_score = king_escape_square_reasons(board, move, child)
+                reasons.extend(escape_reasons)
+                score += escape_score
+            if settings.reply_mate_scan and should_scan_reply_mate(
+                settings.search.depth,
+                board,
+                move,
+                captured_value=captured_value,
+                reasons=reasons,
+                objections=objections,
+            ):
+                reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
+                objections.extend(reply_mate_objections)
+                score += reply_mate_score
         if settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
@@ -123,6 +202,34 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 objections.append(f"search_refutes:{settings.search.backend}:{search_result.score}")
                 objections.append(search_line_label)
             score += search_result.score
+            if (
+                settings.search.depth == 1
+                and search_result.score <= -700
+                and settings.reply_mate_scan
+                and not has_reply_mate_in_one_objection(objections)
+            ):
+                reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
+                objections.extend(reply_mate_objections)
+                score += reply_mate_score
+        drift_objections, drift_score = unsupported_major_drift_objections(
+            board,
+            move,
+            captured_value=captured_value,
+            gives_check=gives_check,
+            reasons=reasons,
+        )
+        objections.extend(drift_objections)
+        score += drift_score
+        repetition_objections, repetition_score = immediate_repetition_objections(
+            move,
+            recent_own_move=settings.recent_own_move,
+            captured_value=captured_value,
+            gives_check=gives_check,
+            promotion_value=promotion_value,
+            reasons=reasons,
+        )
+        objections.extend(repetition_objections)
+        score += repetition_score
         reply_attacks = bounded_reply_attacks(
             board,
             move,
@@ -151,7 +258,100 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 smt_witnesses=tuple(smt_witnesses),
             )
         )
+    if settings.reply_mate_scan:
+        probes = scan_forced_reply_mates_for_candidate_moves(
+            board,
+            legal_moves,
+            probes,
+            dialectic_depth=settings.dialectic_depth,
+            search_depth=settings.search.depth,
+        )
     return sorted(probes, key=lambda probe: (-probe.score, probe.uci))
+
+
+def has_reply_mate_in_one_objection(objections: list[str]) -> bool:
+    return any(
+        objection.startswith("tactical:allows_reply_mate_in_one:")
+        for objection in objections
+    )
+
+
+def unsupported_major_drift_objections(
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int,
+    gives_check: bool,
+    reasons: list[str],
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() != "q":
+        return (), 0
+    if board.fullmove_number > 35 or captured_value > 0 or gives_check:
+        return (), 0
+    if any(is_direct_tactical_warrant(reason) for reason in reasons):
+        return (), 0
+    return ((f"strategy:unsupported_major_drift:{move.uci()}",), -300)
+
+
+def immediate_repetition_objections(
+    move: Any,
+    *,
+    recent_own_move: str | None,
+    captured_value: int,
+    gives_check: bool,
+    promotion_value: int,
+    reasons: list[str],
+) -> tuple[tuple[str, ...], int]:
+    if recent_own_move is None or len(recent_own_move) < 4:
+        return (), 0
+    if captured_value > 0 or promotion_value > 0 or gives_check:
+        return (), 0
+    if any(is_direct_tactical_warrant(reason) for reason in reasons):
+        return (), 0
+    move_text = move.uci()
+    if move_text[:2] != recent_own_move[2:4] or move_text[2:4] != recent_own_move[:2]:
+        return (), 0
+    return ((f"strategy:immediate_repetition:{move_text}:reverses:{recent_own_move}",), -1_000)
+
+
+def is_direct_tactical_warrant(reason: str) -> bool:
+    return reason.startswith(
+        (
+            "terminal:",
+            "tactical:",
+            "material:",
+            "procedural:",
+            "smt:",
+            "search_support:",
+        )
+    )
+
+
+def king_escape_square_reasons(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() != "p":
+        return (), 0
+    color = piece_color(piece)
+    king_square = board.king_square(color)
+    if not king_adjacent(king_square, move.from_square):
+        return (), 0
+    if child.piece_at(move.from_square) is not None:
+        return (), 0
+    if child.is_square_attacked(move.from_square, opposite(color)):
+        return (), 0
+    return ((f"king_safety:escape_square:{move.uci()}:{square_name(move.from_square)}",), 300)
+
+
+def king_adjacent(left: int, right: int) -> bool:
+    return max(
+        abs(file_of(left) - file_of(right)),
+        abs(rank_of(left) - rank_of(right)),
+    ) == 1
 
 
 def fork_witness_labels(witness: Any, gives_check: bool) -> tuple[tuple[str, ...], tuple[str, ...], int]:
@@ -171,6 +371,678 @@ def fork_witness_labels(witness: Any, gives_check: bool) -> tuple[tuple[str, ...
             return tuple(labels), objections, 0
     compatibility = f"smt:fork:{witness.target_count}:{witness.target_value}"
     return (compatibility, *labels), (), max(0, witness.net_value)
+
+
+def moved_piece_safety_labels(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+    *,
+    captured_value: int,
+    gives_check: bool,
+    promotion_value: int,
+) -> tuple[tuple[str, ...], tuple[str, ...], int]:
+    moved_piece = board.piece_at(move.from_square)
+    if moved_piece is None:
+        return (), (), 0
+    moved_value = OWNED_PIECE_VALUE.get((move.promotion or moved_piece).lower(), 0)
+    if moved_value <= 0:
+        return (), (), 0
+    defended = child.is_square_attacked(move.to_square, opposite(child.turn))
+    en_pris = child.is_square_attacked(move.to_square, child.turn)
+    reasons: list[str] = []
+    objections: list[str] = []
+    score = 0
+    if defended:
+        reasons.append(f"piece_safety:defended:{move.uci()}:{moved_value}")
+        score += 15
+    if en_pris:
+        exchange_gain = captured_value + promotion_value - moved_value
+        if gives_check and exchange_gain >= -100:
+            reasons.append(f"tactical:checking_exchange_pressure:{move.uci()}:{exchange_gain}")
+        elif exchange_gain < 0:
+            objections.append(f"safety:moved_piece_en_pris:{moved_value}")
+            score += exchange_gain
+            if moved_value >= OWNED_PIECE_VALUE["q"] and exchange_gain <= -300:
+                objections.append(f"safety:queen_blunder:{move.uci()}:{-exchange_gain}")
+                score -= moved_value
+        else:
+            reasons.append(f"material:exchange_nonnegative:{exchange_gain}")
+    return tuple(reasons), tuple(objections), score
+
+
+def moved_piece_threat_labels(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], int]:
+    moved_piece = board.piece_at(move.from_square)
+    if moved_piece is None:
+        return (), 0
+    targets = []
+    for square, piece in enumerate(child.squares):
+        if piece is None or piece_color(piece) != child.turn:
+            continue
+        if moved_piece_attacks_square(child, move.to_square, square, moved_piece):
+            value = OWNED_PIECE_VALUE[piece.lower()]
+            targets.append(value)
+    target_value = sum(targets)
+    if target_value < 500:
+        return (), 0
+    return (
+        (
+            f"tactical:threat:targets:{len(targets)}:value:{target_value}",
+        ),
+        min(target_value, 700),
+    )
+
+
+def opening_development_objections(
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int,
+    gives_check: bool,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None:
+        return (), 0
+    color = piece_color(piece)
+    kind = piece.lower()
+    undeveloped_minors = undeveloped_minor_count(board, color)
+    if (
+        kind in {"n", "b"}
+        and gives_check
+        and captured_value == 0
+        and board.fullmove_number <= 10
+        and undeveloped_minors >= 2
+    ):
+        return (
+            (f"opening:premature_minor_check:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
+            -900,
+        )
+    if kind not in {"q", "r"}:
+        return (), 0
+    if captured_value >= OWNED_PIECE_VALUE["n"]:
+        return (), 0
+    if kind == "r" and captured_value == 0 and board.fullmove_number <= 20:
+        return (
+            (f"opening:premature_rook:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
+            -250,
+        )
+    if kind != "q" or board.fullmove_number > 10 or undeveloped_minors < 2:
+        return (), 0
+    return (
+        (f"opening:premature_queen:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
+        -1_200,
+    )
+
+
+def undeveloped_minor_count(board: OwnedBoard, color: str) -> int:
+    home_squares = (
+        ("b1", "g1", "c1", "f1")
+        if color == "w"
+        else ("b8", "g8", "c8", "f8")
+    )
+    expected = ("N", "N", "B", "B") if color == "w" else ("n", "n", "b", "b")
+    return sum(
+        1
+        for square, piece in zip(home_squares, expected, strict=True)
+        if board.piece_at(square) == piece
+    )
+
+
+def opening_minor_retreat_objections(
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int,
+    gives_check: bool,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() not in {"n", "b"}:
+        return (), 0
+    if board.fullmove_number > 20 or captured_value > 0 or gives_check:
+        return (), 0
+    color = piece_color(piece)
+    if is_minor_home_square(move.from_square, piece):
+        return (), 0
+    to_rank = rank_of(move.to_square)
+    retreats_to_home_ranks = to_rank <= 1 if color == "w" else to_rank >= 6
+    if not retreats_to_home_ranks:
+        return (), 0
+    return ((f"opening:minor_retreat:{move.uci()}",), -400)
+
+
+def is_minor_home_square(square: int, piece: str) -> bool:
+    if piece == "N":
+        return square in {square_index("b1"), square_index("g1")}
+    if piece == "B":
+        return square in {square_index("c1"), square_index("f1")}
+    if piece == "n":
+        return square in {square_index("b8"), square_index("g8")}
+    if piece == "b":
+        return square in {square_index("c8"), square_index("f8")}
+    return False
+
+
+def opening_king_safety_objections(
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int = 0,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() != "k":
+        return (), 0
+    if move.kind == "castle" or board.fullmove_number > 20:
+        return (), 0
+    color = piece_color(piece)
+    if board.in_check(color):
+        if captured_value == 0 and not king_stays_on_home_rank(color, move.to_square):
+            return ((f"opening:king_center_flight:{move.uci()}",), -400)
+        return (), 0
+    return ((f"opening:king_walk:{move.uci()}",), -400)
+
+
+def king_stays_on_home_rank(color: str, square: int) -> bool:
+    return rank_of(square) == (0 if color == "w" else 7)
+
+
+def flank_pawn_weakening_objections(
+    board: OwnedBoard,
+    move: Any,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() != "p" or board.fullmove_number > 20:
+        return (), 0
+    color = piece_color(piece)
+    king_square = board.king_square(color)
+    from_file = file_of(move.from_square)
+    labels: list[str] = []
+    score = 0
+    if king_square in {square_index("g1"), square_index("g8")} and from_file in {6, 7}:
+        labels.append(f"king_safety:castled_flank_pawn_weakening:{move.uci()}")
+        score -= 900
+    elif king_square in {square_index("c1"), square_index("c8")} and from_file in {0, 1, 2}:
+        labels.append(f"king_safety:castled_flank_pawn_weakening:{move.uci()}")
+        score -= 900
+    elif from_file in {6, 7}:
+        labels.append(f"king_safety:flank_pawn_weakening:{move.uci()}")
+        score -= 900
+    if labels and abs(rank_of(move.to_square) - rank_of(move.from_square)) == 2:
+        labels.append(f"king_safety:flank_pawn_lunge:{move.uci()}")
+        score -= 400
+    return tuple(labels), score
+
+
+def advanced_flank_pawn_response_labels(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], tuple[str, ...], int]:
+    threats = advanced_flank_pawn_threats(board, board.turn)
+    if not threats:
+        return (), (), 0
+    child_threats = advanced_flank_pawn_threats(child, board.turn)
+    if len(child_threats) < len(threats):
+        return (f"king_safety:advanced_flank_pawn_response:{move.uci()}",), (), 1_200
+    labels = tuple(
+        f"king_safety:unanswered_advanced_flank_pawn:{move.uci()}:{square_name(pawn_square)}:{square_name(target_square)}"
+        for pawn_square, target_square in threats
+    )
+    return (), labels, -1_500 * len(labels)
+
+
+def advanced_flank_pawn_threats(
+    board: OwnedBoard,
+    color: str,
+) -> tuple[tuple[int, int], ...]:
+    opponent = opposite(color)
+    threats: list[tuple[int, int]] = []
+    for target_square in sorted(king_flank_pawn_squares(color)):
+        target_piece = board.piece_at(target_square)
+        if target_piece is None or piece_color(target_piece) != color:
+            continue
+        for pawn_square, pawn in enumerate(board.squares):
+            if pawn is None or pawn.lower() != "p" or piece_color(pawn) != opponent:
+                continue
+            if moved_piece_attacks_square(board, pawn_square, target_square, pawn):
+                threats.append((pawn_square, target_square))
+    return tuple(sorted(set(threats)))
+
+
+def ignored_hanging_piece_objections(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], int]:
+    color = board.turn
+    opponent = opposite(color)
+    labels: list[str] = []
+    score = 0
+    for square, piece in enumerate(board.squares):
+        if piece is None or piece_color(piece) != color:
+            continue
+        value = OWNED_PIECE_VALUE[piece.lower()]
+        if value < OWNED_PIECE_VALUE["n"]:
+            continue
+        if not lower_value_attacker_exists(board, square, opponent, value):
+            continue
+        if move.from_square == square:
+            continue
+        if child.piece_at(square) == piece and lower_value_attacker_exists(child, square, opponent, value):
+            labels.append(f"safety:ignored_hanging_piece:{move.uci()}:{square_name(square)}:{value}")
+            score -= value
+    return tuple(labels), score
+
+
+def lower_value_attacker_exists(
+    board: OwnedBoard,
+    square: int,
+    attacker_color: str,
+    target_value: int,
+) -> bool:
+    for attacker_square, attacker in enumerate(board.squares):
+        if attacker is None or piece_color(attacker) != attacker_color:
+            continue
+        if OWNED_PIECE_VALUE[attacker.lower()] >= target_value:
+            continue
+        if moved_piece_attacks_square(board, attacker_square, square, attacker):
+            return True
+    return False
+
+
+def king_is_castled(board: OwnedBoard, color: str) -> bool:
+    king_square = board.king_square(color)
+    if color == "w":
+        return king_square in {square_index("g1"), square_index("c1")}
+    return king_square in {square_index("g8"), square_index("c8")}
+
+
+def queen_flank_invasion_objections(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], int]:
+    color = piece_color(board.piece_at(move.from_square) or ("P" if board.turn == "w" else "p"))
+    vulnerable = king_flank_pawn_squares(color)
+    labels: list[str] = []
+    opponent = child.turn
+    for queen_square, queen in enumerate(child.squares):
+        if queen is None or queen.lower() != "q" or piece_color(queen) != opponent:
+            continue
+        for target in vulnerable:
+            captured = child.piece_at(target)
+            if (
+                captured is not None
+                and captured.lower() == "p"
+                and moved_piece_attacks_square(child, queen_square, target, queen)
+            ):
+                labels.append(f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(target)}")
+    if not labels:
+        return (), 0
+    return tuple(sorted(set(labels))), -2_000
+
+
+def king_flank_pawn_squares(color: str) -> frozenset[int]:
+    if color == "w":
+        return frozenset({square_index("g2"), square_index("h2")})
+    return frozenset({square_index("g7"), square_index("h7")})
+
+
+def reply_mate_in_one_objections(
+    child: OwnedBoard,
+    move: Any,
+) -> tuple[tuple[str, ...], int]:
+    replies = []
+    for reply in child.legal_moves():
+        if owned_is_checkmate(child.apply(reply)):
+            replies.append(reply.uci())
+    if not replies:
+        return (), 0
+    labels = tuple(
+        f"tactical:allows_reply_mate_in_one:{move.uci()}:{reply}"
+        for reply in sorted(replies)
+    )
+    return labels, -100_000
+
+
+def reply_forced_mate_objections(
+    child: OwnedBoard,
+    move: Any,
+    *,
+    mate_depth: int,
+) -> tuple[tuple[str, ...], int]:
+    if owned_is_checkmate(child):
+        return (), 0
+    if not has_forced_mate(chess.Board(child.fen()), mate_depth=mate_depth):
+        return (), 0
+    return (f"tactical:allows_reply_forced_mate_in_{mate_depth}:{move.uci()}",), -100_000
+
+
+def scan_forced_reply_mates_for_candidate_moves(
+    board: OwnedBoard,
+    legal_moves: list[Any],
+    probes: list[MoveProbe],
+    *,
+    dialectic_depth: int,
+    search_depth: int,
+) -> list[MoveProbe]:
+    if search_depth not in {0, 1, 2}:
+        return probes
+    if search_depth == 0:
+        candidate_limit = 12
+    elif search_depth == 1:
+        candidate_limit = 6
+    else:
+        candidate_limit = 12
+    move_by_uci = {move.uci(): move for move in legal_moves}
+    legal_move_count = len(legal_moves)
+    scan_depth_one_mate_three = (
+        search_depth == 1
+        and legal_move_count <= 2
+        and board.in_check(board.turn)
+    )
+    scan_depth_zero_low_mobility_mate_three = search_depth == 0 and legal_move_count <= 8
+    updated: dict[str, MoveProbe] = {}
+    scanned: set[str] = set()
+    scan_budget = candidate_limit * 3 if search_depth == 1 else candidate_limit
+    while len(scanned) < scan_budget:
+        current_probes = [updated.get(probe.uci, probe) for probe in probes]
+        made_progress = False
+        remaining_budget = scan_budget - len(scanned)
+        for probe in forced_reply_mate_scan_candidates(
+            board,
+            move_by_uci,
+            current_probes,
+            dialectic_depth=dialectic_depth,
+            search_depth=search_depth,
+            candidate_limit=min(candidate_limit, remaining_budget),
+            legal_move_count=legal_move_count,
+        ):
+            if probe.uci in scanned:
+                continue
+            scanned.add(probe.uci)
+            made_progress = True
+            move = move_by_uci[probe.uci]
+            mate_depths = forced_reply_mate_depths(
+                probe,
+                board=board,
+                move=move,
+                search_depth=search_depth,
+                scan_depth_one_mate_three=scan_depth_one_mate_three,
+                scan_depth_zero_low_mobility_mate_three=scan_depth_zero_low_mobility_mate_three,
+                legal_move_count=legal_move_count,
+            )
+            child = board.apply(move)
+            forced_mate_objections: tuple[str, ...] = ()
+            forced_mate_score = 0
+            for mate_depth in mate_depths:
+                forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
+                    child,
+                    move,
+                    mate_depth=mate_depth,
+                )
+                if forced_mate_objections:
+                    break
+            if not forced_mate_objections:
+                continue
+            updated[probe.uci] = replace(
+                probe,
+                score=probe.score + forced_mate_score,
+                objections=probe.objections + forced_mate_objections,
+            )
+        if not made_progress:
+            break
+        if search_depth != 1:
+            break
+        if len(scanned) >= scan_budget:
+            break
+        if not updated:
+            break
+    return [updated.get(probe.uci, probe) for probe in probes]
+
+
+def forced_reply_mate_scan_candidates(
+    board: OwnedBoard,
+    move_by_uci: dict[str, Any],
+    probes: list[MoveProbe],
+    *,
+    dialectic_depth: int,
+    search_depth: int,
+    candidate_limit: int,
+    legal_move_count: int,
+) -> list[MoveProbe]:
+    eligible = [
+        probe
+        for probe in probes
+        if should_consider_forced_reply_mate_candidate(
+            probe,
+            dialectic_depth=dialectic_depth,
+            search_depth=search_depth,
+        )
+        if should_scan_reply_forced_mate(
+            search_depth,
+            board,
+            move_by_uci[probe.uci],
+            reasons=list(probe.reasons),
+            objections=list(probe.objections),
+            legal_move_count=legal_move_count,
+        )
+    ]
+    if len(eligible) <= candidate_limit:
+        return sorted(eligible, key=lambda candidate: (-candidate.score, candidate.uci))
+
+    score_budget = max(1, candidate_limit // 2)
+    selected: dict[str, MoveProbe] = {}
+    for probe in sorted(eligible, key=lambda candidate: (-candidate.score, candidate.uci))[:score_budget]:
+        selected[probe.uci] = probe
+    for probe in sorted(
+        eligible,
+        key=lambda candidate: (
+            search_refutation_sort_key(candidate.objections),
+            -candidate.score,
+            candidate.uci,
+        ),
+    ):
+        selected.setdefault(probe.uci, probe)
+        if len(selected) >= candidate_limit:
+            break
+    return list(selected.values())
+
+
+def should_consider_forced_reply_mate_candidate(
+    probe: MoveProbe,
+    *,
+    dialectic_depth: int,
+    search_depth: int,
+) -> bool:
+    if search_depth == 0 and dialectic_depth != 0:
+        return not (probe.gives_check or probe.captured_value > 0 or probe.promotion_value > 0)
+    return True
+
+
+def forced_reply_mate_depths(
+    probe: MoveProbe,
+    *,
+    board: OwnedBoard,
+    move: Any,
+    search_depth: int,
+    scan_depth_one_mate_three: bool,
+    scan_depth_zero_low_mobility_mate_three: bool,
+    legal_move_count: int,
+) -> tuple[int, ...]:
+    if scan_depth_one_mate_three:
+        return (2, 3)
+    if scan_depth_zero_low_mobility_mate_three:
+        return (2, 3)
+    if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
+        return (2, 3)
+    if (
+        search_depth == 1
+        and legal_move_count <= 20
+        and has_search_refutation_at_most(list(probe.objections), -700)
+    ):
+        return (2, 3)
+    if search_depth in {0, 1}:
+        return (2,)
+    return (2, 3)
+
+
+def is_deeply_refuted_major_move(
+    board: OwnedBoard,
+    move: Any,
+    objections: tuple[str, ...],
+) -> bool:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() not in {"q", "r"}:
+        return False
+    return has_search_refutation_at_most(list(objections), -1_500)
+
+
+def search_refutation_sort_key(objections: tuple[str, ...]) -> int:
+    scores = []
+    for objection in objections:
+        if not objection.startswith("search_refutes:"):
+            continue
+        parts = objection.split(":")
+        if len(parts) == 3:
+            scores.append(int(parts[2]))
+    return min(scores, default=0)
+
+
+def should_scan_reply_mate(
+    search_depth: int,
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int,
+    reasons: list[str],
+    objections: list[str],
+) -> bool:
+    if search_depth == 0:
+        return True
+    if search_depth != 1:
+        return False
+    piece = board.piece_at(move.from_square)
+    if piece is not None and piece.lower() == "k":
+        return True
+    if captured_value >= OWNED_PIECE_VALUE["n"]:
+        return True
+    if piece is not None and piece.lower() in {"q", "r"} and any(
+        reason.startswith("tactical:threat:")
+        for reason in reasons
+    ):
+        return True
+    return any(
+        objection.startswith("king_safety:")
+        or objection.startswith("opening:king_walk:")
+        or objection.startswith("opening:king_center_flight:")
+        or objection.startswith("opening:minor_retreat:")
+        for objection in objections
+    )
+
+
+def should_scan_reply_forced_mate(
+    search_depth: int,
+    board: OwnedBoard,
+    move: Any,
+    *,
+    reasons: list[str],
+    objections: list[str],
+    legal_move_count: int | None = None,
+) -> bool:
+    if search_depth not in {0, 1, 2}:
+        return False
+    piece = board.piece_at(move.from_square)
+    if piece is None:
+        return False
+    if search_depth == 0:
+        return True
+    if search_depth == 1:
+        if piece.lower() == "k":
+            return True
+        if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objections, -100):
+            return True
+        if has_search_refutation_at_most(objections, -200):
+            return True
+        if (
+            legal_move_count is not None
+            and legal_move_count <= 2
+            and board.in_check(board.turn)
+            and has_search_refutation_at_most(objections, -700)
+        ):
+            return True
+        if (
+            legal_move_count is not None
+            and legal_move_count <= 20
+            and has_search_refutation_at_most(objections, -700)
+        ):
+            return True
+        has_threat_reason = any(
+            reason.startswith("tactical:threat:")
+            for reason in reasons
+        )
+        if (
+            piece.lower() != "p"
+            and has_threat_reason
+            and has_search_refutation_at_most(objections, -100)
+        ):
+            return True
+        return has_search_refutation_at_most(objections, -700) and (
+            piece.lower() != "p" or has_threat_reason
+        )
+    if piece.lower() == "k":
+        return True
+    if has_large_search_refutation(objections):
+        return True
+    if piece.lower() in {"n", "b", "r", "q"} and has_material_capture_at_least(
+        reasons,
+        OWNED_PIECE_VALUE["n"],
+    ):
+        return True
+    if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objections, -400):
+        return True
+    has_threat_reason = any(
+        reason.startswith("tactical:threat:")
+        for reason in reasons
+    )
+    if not has_threat_reason:
+        return False
+    if piece.lower() in {"q", "r"}:
+        return True
+    return any(
+        objection.startswith("safety:moved_piece_en_pris:")
+        for objection in objections
+    )
+
+
+def has_large_search_refutation(objections: list[str]) -> bool:
+    return has_search_refutation_at_most(objections, -1_000)
+
+
+def has_material_capture_at_least(reasons: list[str], threshold: int) -> bool:
+    prefix = "material:capture:"
+    for reason in reasons:
+        if not reason.startswith(prefix):
+            continue
+        try:
+            if int(reason.removeprefix(prefix)) >= threshold:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def has_search_refutation_at_most(objections: list[str], threshold: int) -> bool:
+    for objection in objections:
+        if not objection.startswith("search_refutes:"):
+            continue
+        parts = objection.split(":")
+        if len(parts) == 3 and int(parts[2]) <= threshold:
+            return True
+    return False
 
 
 def ensure_owned_board(board: Any) -> OwnedBoard:

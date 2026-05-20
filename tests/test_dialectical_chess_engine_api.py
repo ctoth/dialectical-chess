@@ -42,11 +42,13 @@ def test_engine_settings_are_plain_serializable(
         "smt_fork": smt_fork,
         "selector_mode": "argument",
         "positional_reasons": True,
+        "reply_mate_scan": True,
         "reply_analysis": {
             "max_replies": 128,
             "max_defense_nodes": 5000,
             "min_defense_material": 300,
         },
+        "recent_own_move": None,
     }
 
 
@@ -155,3 +157,78 @@ def test_uci_adapter_scores_through_engine(monkeypatch) -> None:
     assert move == "a1a8"
     assert "info score cp 456 pv a1a8" in output.getvalue()
     assert "info string optimizer_status=optimal" in output.getvalue()
+
+
+def test_uci_go_uses_lower_depth_when_clock_is_low() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 4500 btime 9000 winc 100 binc 100")
+
+    assert adjusted.search_depth == 0
+    assert adjusted.search_backend == "alphabeta"
+    assert adjusted.reply_mate_scan
+
+
+def test_uci_go_uses_depth_zero_when_fast_clock_is_short() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 10000 btime 30000 winc 100 binc 100")
+
+    assert adjusted.search_depth == 0
+    assert adjusted.search_backend == "alphabeta"
+    assert adjusted.reply_mate_scan
+
+
+def test_uci_go_keeps_mate_scan_enabled_when_clock_is_critical() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 2400 btime 30000 winc 100 binc 100")
+
+    assert adjusted.search_depth == 0
+    assert adjusted.search_backend == "alphabeta"
+    assert not adjusted.smt_mate
+    assert not adjusted.smt_fork
+    assert not adjusted.positional_reasons
+    assert adjusted.reply_mate_scan
+
+
+def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 15000 btime 30000 winc 200 binc 200")
+
+    assert adjusted.search_depth == 1
+    assert adjusted.search_backend == "alphabeta"
+
+
+def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 25000 btime 30000 winc 200 binc 200")
+
+    assert adjusted is settings

@@ -100,16 +100,13 @@ def root_search_result(
 
 
 def negamax(board: Any, depth: int) -> SearchResult:
-    if owned_is_checkmate(board):
-        return SearchResult(score=-100_000 - depth, line=())
-    if owned_is_stalemate(board):
-        return SearchResult(score=0, line=())
-    if depth <= 0:
-        return SearchResult(score=static_evaluation(board), line=())
+    terminal = terminal_or_leaf_result(board, depth)
+    if terminal.result is not None:
+        return terminal.result
 
     best: SearchResult | None = None
     best_move: Any | None = None
-    for move in board.legal_moves():
+    for move in ordered_moves(board, terminal.legal_moves):
         child = negamax(board.apply(move), depth - 1)
         candidate = SearchResult(score=-child.score, line=(move.uci(),) + child.line)
         if (
@@ -135,16 +132,13 @@ def alphabeta(
     alpha: int,
     beta: int,
 ) -> SearchResult:
-    if owned_is_checkmate(board):
-        return SearchResult(score=-100_000 - depth, line=())
-    if owned_is_stalemate(board):
-        return SearchResult(score=0, line=())
-    if depth <= 0:
-        return SearchResult(score=static_evaluation(board), line=())
+    terminal = terminal_or_leaf_result(board, depth)
+    if terminal.result is not None:
+        return terminal.result
 
     best: SearchResult | None = None
     best_move: Any | None = None
-    for move in board.legal_moves():
+    for move in ordered_moves(board, terminal.legal_moves):
         child = alphabeta(board.apply(move), depth - 1, alpha=-beta, beta=-alpha)
         candidate = SearchResult(score=-child.score, line=(move.uci(),) + child.line)
         if (
@@ -164,6 +158,35 @@ def alphabeta(
     if best is None:
         return SearchResult(score=static_evaluation(board), line=())
     return best
+
+
+@dataclass(frozen=True)
+class TerminalSearchState:
+    legal_moves: tuple[Any, ...]
+    result: SearchResult | None
+
+
+def terminal_or_leaf_result(board: Any, depth: int) -> TerminalSearchState:
+    legal_moves = tuple(board.legal_moves())
+    if not legal_moves:
+        if board.in_check(board.turn):
+            return TerminalSearchState(legal_moves, SearchResult(score=-100_000 - depth, line=()))
+        return TerminalSearchState(legal_moves, SearchResult(score=0, line=()))
+    if depth <= 0:
+        return TerminalSearchState(legal_moves, SearchResult(score=static_evaluation(board), line=()))
+    return TerminalSearchState(legal_moves, None)
+
+
+def ordered_moves(board: Any, moves: tuple[Any, ...]) -> tuple[Any, ...]:
+    return tuple(sorted(moves, key=lambda move: move_order_key(board, move)))
+
+
+def move_order_key(board: Any, move: Any) -> tuple[int, str]:
+    promotion = OWNED_PIECE_VALUE.get(move.promotion or "", 0)
+    capture = owned_capture_value(board, move)
+    moved = board.piece_at(move.from_square)
+    moved_value = OWNED_PIECE_VALUE.get(moved.lower(), 0) if moved else 0
+    return (-(promotion + 10 * capture - moved_value), move.uci())
 
 
 def static_evaluation(board: Any) -> int:

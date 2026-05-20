@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from argparse import Namespace
+from io import StringIO
 
 import pytest
 
@@ -20,6 +21,68 @@ def test_uci_position_parses_startpos_moves() -> None:
     board = parse_uci_position("position startpos moves e2e4 e7e5")
 
     assert board.fen() == "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2"
+
+
+def test_uci_position_tracks_recent_own_move() -> None:
+    pytest.importorskip("chess")
+    from dialectical_chess.uci import parse_uci_position_state
+
+    board, recent_own_move = parse_uci_position_state("position startpos moves e2e4 e7e5 g1f3 b8c6")
+
+    assert board.fen() == "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+    assert recent_own_move == "g1f3"
+
+
+def test_uci_loop_keeps_recent_own_move_across_fen_only_updates(monkeypatch) -> None:
+    pytest.importorskip("chess")
+    import dialectical_chess.uci as uci
+
+    seen_recent_own_moves: list[str | None] = []
+    chosen_moves = iter(("a5c6", "c6a5"))
+
+    def fake_choose_uci_move(board, *, settings, output_stream):
+        seen_recent_own_moves.append(settings.recent_own_move)
+        return next(chosen_moves)
+
+    monkeypatch.setattr(uci, "choose_uci_move", fake_choose_uci_move)
+
+    input_stream = StringIO(
+        "\n".join(
+            (
+                "position fen r2qk2r/pppbn1pp/1b2p3/n2pPpN1/1P1P4/2PB4/3N1PPP/1RBQK2R b Kkq - 1 12",
+                "go",
+                "position fen r2qk2r/pppbn1pp/1bn1p3/1P1pPpN1/3P4/2PB4/3N1PPP/1RBQK2R b Kkq - 0 13",
+                "go",
+                "quit",
+                "",
+            )
+        )
+    )
+    output_stream = StringIO()
+
+    assert uci.run_uci(input_stream, output_stream) == 0
+    assert seen_recent_own_moves == [None, "a5c6"]
+    assert output_stream.getvalue().splitlines() == ["bestmove a5c6", "bestmove c6a5"]
+
+
+def test_low_clock_keeps_dialectical_evidence_enabled() -> None:
+    pytest.importorskip("chess")
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("2b1kbnr/1p1p1ppp/4p3/4P3/2q5/6P1/1r1K3P/R2Q3R w k - 7 27")
+    settings = settings_for_go(
+        EngineSettings(search_depth=1, smt_mate=True, smt_fork=True, positional_reasons=True, reply_mate_scan=True),
+        board,
+        "go wtime 1000 btime 1000",
+    )
+
+    assert settings.search_depth == 0
+    assert settings.smt_mate is False
+    assert settings.smt_fork is False
+    assert settings.positional_reasons is False
+    assert settings.reply_mate_scan is True
 
 
 def test_epd_parses_best_and_avoid_moves() -> None:

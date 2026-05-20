@@ -9,3 +9,7 @@ reports/
 dist/
 build/
 *.egg-info/
+
+# Paper corpus — binary artifacts stay local-only, text notes are committed
+*.pdf
+*.png

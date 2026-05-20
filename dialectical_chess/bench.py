@@ -17,6 +17,7 @@ import chess
 from dialectical_chess.arguments import SELECTOR_MODES
 from dialectical_chess.board import PERFT_FIXTURES, OwnedBoard, owned_perft
 from dialectical_chess.engine import DialecticalChessEngine, EngineSettings
+from dialectical_chess.evidence import is_report_positional_reason
 from dialectical_chess.loss_mining import mine_loss_turning_points, reviewed_epd_lines
 from dialectical_chess.matches import run_internal_uci_match, run_uci_match
 from dialectical_chess.search import ReplyAnalysisSettings
@@ -484,7 +485,7 @@ def classify_positional_delta(positional_on: dict[str, Any], positional_off: dic
             {
                 reason.split(":", 1)[0]
                 for reason in on_reasons
-                if is_positional_reason(reason)
+                if is_report_positional_reason(reason)
             }
         ),
         "winning_move_tactical_markers": tactical_markers(off_reasons),
@@ -503,20 +504,6 @@ def classify_positional_delta(positional_on: dict[str, Any], positional_off: dic
             "objection:no_immediate_tactical_warrant" in positional_on.get("objections", [])
         ),
     }
-
-
-def is_positional_reason(reason: str) -> bool:
-    return reason.startswith(
-        (
-            "center_control:",
-            "development:",
-            "file_control:",
-            "king_safety:",
-            "outpost:",
-            "pawn_structure:",
-            "piece_activity:",
-        )
-    )
 
 
 def tactical_markers(reasons: list[str]) -> list[str]:
