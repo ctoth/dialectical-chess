@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import chess
@@ -156,20 +156,6 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
                 objections.extend(reply_mate_objections)
                 score += reply_mate_score
-            if should_scan_reply_forced_mate(
-                settings.search.depth,
-                board,
-                move,
-                reasons=reasons,
-                objections=objections,
-            ):
-                forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
-                    child,
-                    move,
-                    mate_depth=3,
-                )
-                objections.extend(forced_mate_objections)
-                score += forced_mate_score
         if settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
@@ -229,6 +215,12 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 smt_witnesses=tuple(smt_witnesses),
             )
         )
+    probes = scan_forced_reply_mates_for_candidate_moves(
+        board,
+        legal_moves,
+        probes,
+        search_depth=settings.search.depth,
+    )
     return sorted(probes, key=lambda probe: (-probe.score, probe.uci))
 
 
@@ -571,6 +563,42 @@ def reply_forced_mate_objections(
     if not has_forced_mate(chess.Board(child.fen()), mate_depth=mate_depth):
         return (), 0
     return (f"tactical:allows_reply_forced_mate_in_{mate_depth}:{move.uci()}",), -100_000
+
+
+def scan_forced_reply_mates_for_candidate_moves(
+    board: OwnedBoard,
+    legal_moves: list[Any],
+    probes: list[MoveProbe],
+    *,
+    search_depth: int,
+) -> list[MoveProbe]:
+    if search_depth > 2:
+        return probes
+    move_by_uci = {move.uci(): move for move in legal_moves}
+    updated: dict[str, MoveProbe] = {}
+    for probe in sorted(probes, key=lambda candidate: (-candidate.score, candidate.uci))[:4]:
+        move = move_by_uci[probe.uci]
+        if not should_scan_reply_forced_mate(
+            search_depth,
+            board,
+            move,
+            reasons=list(probe.reasons),
+            objections=list(probe.objections),
+        ):
+            continue
+        forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
+            board.apply(move),
+            move,
+            mate_depth=3,
+        )
+        if not forced_mate_objections:
+            continue
+        updated[probe.uci] = replace(
+            probe,
+            score=probe.score + forced_mate_score,
+            objections=probe.objections + forced_mate_objections,
+        )
+    return [updated.get(probe.uci, probe) for probe in probes]
 
 
 def should_scan_reply_mate(
