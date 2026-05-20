@@ -505,9 +505,19 @@ def extra_objection_copies(objection: str) -> int:
 
 
 def extra_defense_copies(reply_attack: str) -> int:
-    if ":defended:" in reply_attack:
+    if is_defensible_reply_attack(reply_attack):
         return 12
     return 0
+
+
+def extra_reply_attack_copies(reply_attack: str) -> int:
+    if reply_attack.startswith("reply_mate:"):
+        return 32
+    return 0
+
+
+def is_defensible_reply_attack(reply_attack: str) -> bool:
+    return reply_attack.startswith("reply_captures_moved_piece:defended:")
 
 
 def accepted_defense_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
@@ -578,7 +588,11 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
             reply_arg = f"reply_attack:{probe.uci}:{reply_attack}"
             arguments.add(reply_arg)
             defeats.add((reply_arg, move_arg))
-            if ":defended:" in reply_attack:
+            for index in range(extra_reply_attack_copies(reply_attack)):
+                weighted_reply_arg = f"reply_attack:{probe.uci}:{reply_attack}:{index}"
+                arguments.add(weighted_reply_arg)
+                defeats.add((weighted_reply_arg, move_arg))
+            if is_defensible_reply_attack(reply_attack):
                 defense_arg = f"defense:{probe.uci}:{reply_attack}"
                 arguments.add(defense_arg)
                 defeats.add((defense_arg, reply_arg))

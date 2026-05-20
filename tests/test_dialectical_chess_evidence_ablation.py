@@ -2223,3 +2223,22 @@ def test_medium_refuted_pawn_capture_gets_forced_mate_depth_three_objection() ->
     ).choose_move(board)
 
     assert decision.move_uci in {"d4d5", "e3d2"}
+
+
+def test_reply_mate_attack_is_not_defeated_by_defended_label() -> None:
+    board = owned_board_from_fen("r1bq1k1r/pp1p2pp/3N4/2p1N3/P2p4/RQn5/1P3PPP/2B1RBK1 b - - 2 21")
+    probes = probe_moves(
+        board,
+        dialectic_depth=2,
+        search_depth=1,
+        search_backend="alphabeta",
+        smt_mate=True,
+        smt_fork=True,
+        positional_reasons=True,
+    )
+    probe_by_uci = {probe.uci: probe for probe in probes}
+    graph = build_root_argument_graph(probes)
+
+    assert "reply_mate:defended:b3f7" in probe_by_uci["a7a6"].reply_attacks
+    assert "defense:a7a6:reply_mate:defended:b3f7" not in graph.arguments
+    assert choose_move(probes, graph).uci != "a7a6"
