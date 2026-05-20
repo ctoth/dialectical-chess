@@ -165,10 +165,36 @@ def test_uci_go_uses_lower_depth_when_clock_is_low() -> None:
     board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
     settings = EngineSettings(search_depth=2, search_backend="alphabeta")
 
-    adjusted = settings_for_go(settings, board, "go wtime 6500 btime 9000 winc 100 binc 100")
+    adjusted = settings_for_go(settings, board, "go wtime 2500 btime 9000 winc 100 binc 100")
 
     assert adjusted.search_depth == 1
     assert adjusted.search_backend == "alphabeta"
+
+
+def test_uci_go_keeps_depth_when_clock_has_middle_game_time() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 6500 btime 9000 winc 100 binc 100")
+
+    assert adjusted is settings
+
+
+def test_uci_go_uses_minimum_depth_only_in_emergency_time() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 800 btime 9000 winc 100 binc 100")
+
+    assert adjusted.search_depth == 0
 
 
 def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
