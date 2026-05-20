@@ -576,6 +576,12 @@ def scan_forced_reply_mates_for_candidate_moves(
         return probes
     candidate_limit = 6 if search_depth == 1 else 12
     move_by_uci = {move.uci(): move for move in legal_moves}
+    legal_move_count = len(legal_moves)
+    scan_depth_one_mate_three = (
+        search_depth == 1
+        and legal_move_count <= 4
+        and board.in_check(board.turn)
+    )
     updated: dict[str, MoveProbe] = {}
     scanned: set[str] = set()
     scan_budget = candidate_limit * 2 if search_depth == 1 else candidate_limit
@@ -589,13 +595,14 @@ def scan_forced_reply_mates_for_candidate_moves(
             current_probes,
             search_depth=search_depth,
             candidate_limit=min(candidate_limit, remaining_budget),
+            legal_move_count=legal_move_count,
         ):
             if probe.uci in scanned:
                 continue
             scanned.add(probe.uci)
             made_progress = True
             move = move_by_uci[probe.uci]
-            mate_depths = (2,) if search_depth == 1 else (2, 3)
+            mate_depths = (2, 3) if scan_depth_one_mate_three else ((2,) if search_depth == 1 else (2, 3))
             child = board.apply(move)
             forced_mate_objections: tuple[str, ...] = ()
             forced_mate_score = 0
@@ -632,6 +639,7 @@ def forced_reply_mate_scan_candidates(
     *,
     search_depth: int,
     candidate_limit: int,
+    legal_move_count: int,
 ) -> list[MoveProbe]:
     eligible = [
         probe
@@ -642,6 +650,7 @@ def forced_reply_mate_scan_candidates(
             move_by_uci[probe.uci],
             reasons=list(probe.reasons),
             objections=list(probe.objections),
+            legal_move_count=legal_move_count,
         )
     ]
     if len(eligible) <= candidate_limit:
@@ -715,6 +724,7 @@ def should_scan_reply_forced_mate(
     *,
     reasons: list[str],
     objections: list[str],
+    legal_move_count: int | None = None,
 ) -> bool:
     if search_depth not in {1, 2}:
         return False
@@ -727,6 +737,13 @@ def should_scan_reply_forced_mate(
         if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objections, -100):
             return True
         if piece.lower() == "p" and has_search_refutation_at_most(objections, -1_400):
+            return True
+        if (
+            legal_move_count is not None
+            and legal_move_count <= 4
+            and board.in_check(board.turn)
+            and has_search_refutation_at_most(objections, -700)
+        ):
             return True
         has_threat_reason = any(
             reason.startswith("tactical:threat:")
