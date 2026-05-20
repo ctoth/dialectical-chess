@@ -124,6 +124,10 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
             objections.extend(flank_objections)
             score += flank_score
+            if settings.search.depth < 2:
+                reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
+                objections.extend(reply_mate_objections)
+                score += reply_mate_score
         if settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
@@ -356,6 +360,23 @@ def king_flank_pawn_squares(color: str) -> frozenset[int]:
     if color == "w":
         return frozenset({square_index("g2"), square_index("h2")})
     return frozenset({square_index("g7"), square_index("h7")})
+
+
+def reply_mate_in_one_objections(
+    child: OwnedBoard,
+    move: Any,
+) -> tuple[tuple[str, ...], int]:
+    replies = []
+    for reply in child.legal_moves():
+        if owned_is_checkmate(child.apply(reply)):
+            replies.append(reply.uci())
+    if not replies:
+        return (), 0
+    labels = tuple(
+        f"tactical:allows_reply_mate_in_one:{move.uci()}:{reply}"
+        for reply in sorted(replies)
+    )
+    return labels, -100_000
 
 
 def ensure_owned_board(board: Any) -> OwnedBoard:

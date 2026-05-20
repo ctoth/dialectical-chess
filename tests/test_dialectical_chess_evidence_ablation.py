@@ -306,6 +306,30 @@ def test_argument_selector_rejects_search_proven_forced_mate() -> None:
     assert decision.move_uci == "f2f1"
 
 
+def test_reply_mate_in_one_objection_works_without_search_depth() -> None:
+    board = owned_board_from_fen("6nr/n4pp1/k6p/8/3p4/1P6/1PPP1PPP/r1B3K1 w - - 0 22")
+    probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}
+
+    assert "tactical:allows_reply_mate_in_one:c2c4:a1c1" in probes["c2c4"].objections
+    assert probes["c2c4"].score < probes["f2f3"].score
+
+
+def test_argument_selector_rejects_reply_mate_without_search_depth() -> None:
+    board = owned_board_from_fen("6nr/n4pp1/k6p/8/3p4/1P6/1PPP1PPP/r1B3K1 w - - 0 22")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=0,
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "c2c4"
+
+
 def test_queen_flank_invasion_gets_king_safety_objection() -> None:
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

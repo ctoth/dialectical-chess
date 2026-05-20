@@ -269,6 +269,7 @@ def severe_objection_count(probe: MoveProbe) -> int:
         or objection.startswith("opening:premature_queen:")
         or objection.startswith("opening:premature_rook:")
         or objection.startswith("king_safety:queen_flank_invasion:")
+        or objection.startswith("tactical:allows_reply_mate_in_one:")
         or is_forced_mate_refutation(objection)
     )
 
