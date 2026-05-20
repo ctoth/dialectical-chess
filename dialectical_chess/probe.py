@@ -282,19 +282,17 @@ def opening_development_objections(
         return (), 0
     color = piece_color(piece)
     kind = piece.lower()
-    if kind not in {"q", "r"} or board.fullmove_number > 10:
+    if kind not in {"q", "r"}:
         return (), 0
     undeveloped_minors = undeveloped_minor_count(board, color)
-    if undeveloped_minors < 2:
-        return (), 0
     if captured_value >= OWNED_PIECE_VALUE["n"]:
         return (), 0
-    if kind == "r" and captured_value == 0:
+    if kind == "r" and captured_value == 0 and board.fullmove_number <= 20:
         return (
             (f"opening:premature_rook:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
             -250,
         )
-    if kind != "q":
+    if kind != "q" or board.fullmove_number > 10 or undeveloped_minors < 2:
         return (), 0
     return (
         (f"opening:premature_queen:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
