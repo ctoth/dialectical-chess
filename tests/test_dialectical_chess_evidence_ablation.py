@@ -262,6 +262,39 @@ def test_argument_selector_rejects_opening_king_walk() -> None:
     assert decision.move_uci == "b5c6"
 
 
+def test_checked_king_center_flight_gets_safety_objection() -> None:
+    board = owned_board_from_fen("r2qk1nr/pbpp1pNp/1p6/8/3PP3/8/PP2BPPP/RN2K2R b KQkq - 0 12")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_fork=False,
+        )
+    }
+
+    assert "opening:king_center_flight:e8e7" in probes["e8e7"].objections
+    assert "opening:king_center_flight:e8f8" not in probes["e8f8"].objections
+
+
+def test_argument_selector_prefers_back_rank_check_evasion() -> None:
+    board = owned_board_from_fen("r2qk1nr/pbpp1pNp/1p6/8/3PP3/8/PP2BPPP/RN2K2R b KQkq - 0 12")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "e8f8"
+
+
 def test_king_walk_objection_beats_tactical_count_tie_breaks() -> None:
     safe = MoveProbe(
         uci="g1f3",

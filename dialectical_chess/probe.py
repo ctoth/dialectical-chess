@@ -126,7 +126,11 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             )
             objections.extend(minor_retreat_objections)
             score += minor_retreat_score
-            king_objections, king_score = opening_king_safety_objections(board, move)
+            king_objections, king_score = opening_king_safety_objections(
+                board,
+                move,
+                captured_value=captured_value,
+            )
             objections.extend(king_objections)
             score += king_score
             flank_pawn_objections, flank_pawn_score = flank_pawn_weakening_objections(board, move)
@@ -362,6 +366,8 @@ def is_minor_home_square(square: int, piece: str) -> bool:
 def opening_king_safety_objections(
     board: OwnedBoard,
     move: Any,
+    *,
+    captured_value: int = 0,
 ) -> tuple[tuple[str, ...], int]:
     piece = board.piece_at(move.from_square)
     if piece is None or piece.lower() != "k":
@@ -370,8 +376,14 @@ def opening_king_safety_objections(
         return (), 0
     color = piece_color(piece)
     if board.in_check(color):
+        if captured_value == 0 and not king_stays_on_home_rank(color, move.to_square):
+            return ((f"opening:king_center_flight:{move.uci()}",), -400)
         return (), 0
     return ((f"opening:king_walk:{move.uci()}",), -400)
+
+
+def king_stays_on_home_rank(color: str, square: int) -> bool:
+    return rank_of(square) == (0 if color == "w" else 7)
 
 
 def flank_pawn_weakening_objections(

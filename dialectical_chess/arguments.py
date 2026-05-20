@@ -283,6 +283,7 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
         return 2
     if (
         objection.startswith("opening:king_walk:")
+        or objection.startswith("opening:king_center_flight:")
         or objection.startswith("opening:premature_queen:")
         or objection.startswith("opening:premature_rook:")
         or objection.startswith("opening:minor_retreat:")
