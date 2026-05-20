@@ -38,7 +38,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "chess", specifier = ">=1.11.0" },
-    { name = "formal-argumentation", git = "https://github.com/ctoth/argumentation.git?rev=d47c87003afdce450bfeff10f242309c510f1690" },
+    { name = "formal-argumentation", git = "https://github.com/ctoth/argumentation.git?rev=fdf32c1ce4d11a5b4902dcb171bcbedd4f3d7678" },
     { name = "z3-solver", specifier = ">=4.12" },
 ]
 
@@ -53,7 +53,7 @@ dev = [
 [[package]]
 name = "formal-argumentation"
 version = "0.2.0"
-source = { git = "https://github.com/ctoth/argumentation.git?rev=d47c87003afdce450bfeff10f242309c510f1690#d47c87003afdce450bfeff10f242309c510f1690" }
+source = { git = "https://github.com/ctoth/argumentation.git?rev=fdf32c1ce4d11a5b4902dcb171bcbedd4f3d7678#fdf32c1ce4d11a5b4902dcb171bcbedd4f3d7678" }
 
 [[package]]
 name = "hypothesis"

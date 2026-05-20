@@ -31,7 +31,7 @@ classifiers = [
 ]
 dependencies = [
     "chess>=1.11.0",
-    "formal-argumentation @ git+https://github.com/ctoth/argumentation.git@d47c87003afdce450bfeff10f242309c510f1690",
+    "formal-argumentation @ git+https://github.com/ctoth/argumentation.git@fdf32c1ce4d11a5b4902dcb171bcbedd4f3d7678",
     "z3-solver>=4.12",
 ]
 
