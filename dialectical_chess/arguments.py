@@ -84,7 +84,7 @@ def choose_move(
 
         return choose_optimized_move(probes, graph)
     return sorted(
-        grounded_candidates(probes, graph),
+        argument_selection_candidates(probes, graph),
         key=lambda probe: selection_key(probe, graph),
     )[0]
 
@@ -96,6 +96,13 @@ def grounded_candidates(probes: list[MoveProbe], graph: RootArgumentGraph) -> li
         if graph.move_arguments[probe.uci] in graph.grounded_extension
     ]
     return accepted if accepted else probes
+
+
+def argument_selection_candidates(probes: list[MoveProbe], graph: RootArgumentGraph) -> list[MoveProbe]:
+    candidates = grounded_candidates(probes, graph)
+    if any(has_forced_mate_refutation(probe) for probe in candidates):
+        return probes
+    return candidates
 
 
 def score_selection_key(probe: MoveProbe) -> tuple[int, str]:
@@ -123,8 +130,11 @@ def selection_key(
         if f"reply_attack:{probe.uci}:{reply_attack}" in graph.grounded_extension
     )
     if mode == "quiet":
+        forced_mate_refuted = has_forced_mate_refutation(probe)
         return (
             severe_objection_count(probe),
+            1 if forced_mate_refuted else 0,
+            -effective_score(probe, mode) if forced_mate_refuted else 0,
             -move_rank,
             -accepted_tactical,
             unresolved_attacks,
@@ -133,8 +143,11 @@ def selection_key(
             -effective_score(probe, mode),
             probe.uci,
         )
+    forced_mate_refuted = has_forced_mate_refutation(probe)
     return (
         severe_objection_count(probe),
+        1 if forced_mate_refuted else 0,
+        -effective_score(probe, mode) if forced_mate_refuted else 0,
         -accepted_tactical,
         unresolved_attacks,
         -effective_score(probe, mode),
@@ -266,14 +279,25 @@ def severe_objection_count(probe: MoveProbe) -> int:
     return sum(severe_objection_weight(objection, probe) for objection in probe.objections)
 
 
+def has_forced_mate_refutation(probe: MoveProbe) -> bool:
+    return any(
+        is_forced_mate_refutation(objection)
+        or objection.startswith("tactical:allows_reply_mate_in_one:")
+        or objection.startswith("tactical:allows_reply_forced_mate_in_")
+        for objection in probe.objections
+    )
+
+
 def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> int:
     if is_forced_mate_refutation(objection):
-        return 3
+        return 6
     if is_large_search_refutation(objection):
         return 1
     if objection.startswith("tactical:allows_reply_mate_in_one:") or objection.startswith(
-        "tactical:allows_reply_forced_mate_in_"
+        "tactical:allows_reply_forced_mate_in_2:"
     ):
+        return 6
+    if objection.startswith("tactical:allows_reply_forced_mate_in_"):
         return 3
     if objection.startswith("safety:queen_blunder:"):
         return 2

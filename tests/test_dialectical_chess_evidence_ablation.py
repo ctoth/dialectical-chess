@@ -725,7 +725,7 @@ def test_forced_reply_mate_scan_covers_large_search_refutations() -> None:
         )
     }
 
-    assert "tactical:allows_reply_forced_mate_in_3:e7g6" in probes["e7g6"].objections
+    assert "tactical:allows_reply_forced_mate_in_2:e7g6" in probes["e7g6"].objections
 
     decision = DialecticalChessEngine(
         EngineSettings(
@@ -739,6 +739,23 @@ def test_forced_reply_mate_scan_covers_large_search_refutations() -> None:
     ).choose_move(board)
 
     assert decision.move_uci != "e7g6"
+
+
+def test_argument_selector_falls_back_when_grounded_candidates_are_forced_mates() -> None:
+    board = owned_board_from_fen("2k2bnr/2Bpqppp/1p6/3N4/1P6/Q2B1N2/5PPP/R3R1K1 b - - 0 19")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "e7e1"
 
 
 def test_low_search_depth_checks_forced_reply_mate_in_two_for_candidates() -> None:

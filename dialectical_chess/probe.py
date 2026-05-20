@@ -574,7 +574,7 @@ def scan_forced_reply_mates_for_candidate_moves(
 ) -> list[MoveProbe]:
     if search_depth not in {1, 2}:
         return probes
-    mate_depth = 2 if search_depth == 1 else 3
+    mate_depths = (2,) if search_depth == 1 else (2, 3)
     candidate_limit = 6 if search_depth == 1 else 12
     move_by_uci = {move.uci(): move for move in legal_moves}
     updated: dict[str, MoveProbe] = {}
@@ -588,11 +588,17 @@ def scan_forced_reply_mates_for_candidate_moves(
                 objections=list(probe.objections),
             ):
             continue
-        forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
-            board.apply(move),
-            move,
-            mate_depth=mate_depth,
-        )
+        child = board.apply(move)
+        forced_mate_objections: tuple[str, ...] = ()
+        forced_mate_score = 0
+        for mate_depth in mate_depths:
+            forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
+                child,
+                move,
+                mate_depth=mate_depth,
+            )
+            if forced_mate_objections:
+                break
         if not forced_mate_objections:
             continue
         updated[probe.uci] = replace(
