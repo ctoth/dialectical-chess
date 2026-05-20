@@ -25,6 +25,16 @@ def test_fastchess_command_can_emit_diagnostic_pgn() -> None:
         match_tc="30+0.2",
         stockfish_elo=1320,
         stockfish_path="stockfish",
+        dialectic_depth=2,
+        search_depth=1,
+        search_backend="alphabeta",
+        selector_mode="optimizer",
+        reply_max_replies=64,
+        reply_max_defense_nodes=1000,
+        reply_min_defense_material=500,
+        smt_mate=True,
+        smt_fork=False,
+        positional_reasons=True,
     )
 
     command = build_fastchess_command(args, fastchess="fast-chess", uv_executable="uv")
@@ -33,6 +43,7 @@ def test_fastchess_command_can_emit_diagnostic_pgn() -> None:
     assert "file=scratch\\losses.pgn" in command
     assert "notation=uci" in command
     assert "append=false" in command
+    assert "args=run dialectical-chess-probe --uci --dialectic-depth 2 --search-depth 1 --search-backend alphabeta --selector-mode optimizer --reply-max-replies 64 --reply-max-defense-nodes 1000 --reply-min-defense-material 500 --no-smt-fork" in command
 
 
 def test_mines_first_engine_move_that_allows_immediate_mate() -> None:

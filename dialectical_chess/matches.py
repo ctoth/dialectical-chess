@@ -22,9 +22,12 @@ def run_uci_match(args: Namespace) -> dict[str, Any]:
     cutechess = shutil.which("cutechess-cli")
     fastchess = shutil.which("fastchess") or shutil.which("fast-chess")
     uv_executable = shutil.which("uv") or "uv"
+    dialectical_args = dialectical_uci_args(args)
     cutechess_args = [
         "-engine",
-        'name=Dialectical cmd="uv" arg="run" arg="dialectical-chess-probe" arg="--uci" proto=uci',
+        'name=Dialectical cmd="uv" '
+        + " ".join(f'arg="{token}"' for token in dialectical_args)
+        + " proto=uci",
         "-engine",
         'name=DialecticalNoSMT cmd="uv" arg="run" arg="dialectical-chess-probe" arg="--uci" arg="--no-smt-mate" proto=uci',
         "-each",
@@ -84,7 +87,7 @@ def build_fastchess_args(args: Namespace, uv_executable: str) -> list[str]:
         "-engine",
         "name=Dialectical",
         f"cmd={uv_executable}",
-        "args=run dialectical-chess-probe --uci",
+        "args=" + " ".join(dialectical_uci_args(args)),
         "proto=uci",
         f"dir={PROJECT_ROOT}",
         "-engine",
@@ -115,6 +118,35 @@ def build_fastchess_args(args: Namespace, uv_executable: str) -> list[str]:
                 "append=false",
             ]
         )
+    return command
+
+
+def dialectical_uci_args(args: Namespace) -> list[str]:
+    command = [
+        "run",
+        "dialectical-chess-probe",
+        "--uci",
+        "--dialectic-depth",
+        str(args.dialectic_depth),
+        "--search-depth",
+        str(args.search_depth),
+        "--search-backend",
+        args.search_backend,
+        "--selector-mode",
+        args.selector_mode,
+        "--reply-max-replies",
+        str(args.reply_max_replies),
+        "--reply-max-defense-nodes",
+        str(args.reply_max_defense_nodes),
+        "--reply-min-defense-material",
+        str(args.reply_min_defense_material),
+    ]
+    if not args.smt_mate:
+        command.append("--no-smt-mate")
+    if not getattr(args, "smt_fork", True):
+        command.append("--no-smt-fork")
+    if not getattr(args, "positional_reasons", True):
+        command.append("--no-positional-reasons")
     return command
 
 
