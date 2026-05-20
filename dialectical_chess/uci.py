@@ -175,7 +175,11 @@ def choose_uci_move(
 def settings_for_go(settings: EngineSettings, board, command: str) -> EngineSettings:
     if not command.startswith("go"):
         return settings
-    remaining = own_remaining_ms(board, command)
+    limits = own_go_limits(board, command)
+    if limits["movetime"] is not None:
+        remaining = limits["movetime"]
+    else:
+        remaining = limits["remaining"]
     if remaining is None:
         return settings
     search_depth = settings.search_depth
@@ -190,35 +194,63 @@ def settings_for_go(settings: EngineSettings, board, command: str) -> EngineSett
             positional_reasons=False,
             reply_mate_scan=False,
         )
-    if remaining <= 12_000:
-        return replace(
-            settings,
-            dialectic_depth=0,
-            search_depth=min(search_depth, 0),
-            reply_mate_scan=False,
-        )
-    elif remaining <= 25_000:
+    move_budget = estimated_move_budget_ms(limits)
+    if remaining <= 6_000 or move_budget <= 300:
         return replace(
             settings,
             dialectic_depth=0,
             search_depth=min(search_depth, 1),
             reply_mate_scan=False,
         )
-    if search_depth == settings.search_depth:
-        return settings
-    return replace(settings, search_depth=search_depth)
+    return settings
 
 
 def own_remaining_ms(board, command: str) -> int | None:
+    return own_go_limits(board, command)["remaining"]
+
+
+def own_go_limits(board, command: str) -> dict[str, int | None]:
     tokens = command.split()
-    field = "wtime" if board.turn == "w" else "btime"
+    remaining_field = "wtime" if board.turn == "w" else "btime"
+    increment_field = "winc" if board.turn == "w" else "binc"
+    values: dict[str, int | None] = {
+        "remaining": None,
+        "increment": None,
+        "movetime": None,
+        "movestogo": None,
+    }
     for index, token in enumerate(tokens[:-1]):
-        if token == field:
-            try:
-                return int(tokens[index + 1])
-            except ValueError:
-                return None
-    return None
+        if token == remaining_field:
+            values["remaining"] = parsed_int(tokens[index + 1])
+        elif token == increment_field:
+            values["increment"] = parsed_int(tokens[index + 1])
+        elif token == "movetime":
+            values["movetime"] = parsed_int(tokens[index + 1])
+        elif token == "movestogo":
+            values["movestogo"] = parsed_int(tokens[index + 1])
+    return values
+
+
+def parsed_int(text: str) -> int | None:
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def estimated_move_budget_ms(limits: dict[str, int | None]) -> int:
+    movetime = limits["movetime"]
+    if movetime is not None:
+        return max(0, movetime - 50)
+    remaining = limits["remaining"]
+    if remaining is None:
+        return 1_000_000
+    increment = limits["increment"] or 0
+    moves = limits["movestogo"] or 30
+    base = remaining / max(moves, 1)
+    reserve = max(100, min(1000, int(0.03 * remaining)))
+    budget = int(base + 0.75 * increment - 50)
+    return max(0, min(budget, remaining - reserve, int(0.20 * remaining)))
 
 
 def _uci_write(output_stream: TextIO, line: str) -> None:

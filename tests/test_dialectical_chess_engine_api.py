@@ -169,13 +169,13 @@ def test_uci_go_uses_lower_depth_when_clock_is_low() -> None:
 
     adjusted = settings_for_go(settings, board, "go wtime 4500 btime 9000 winc 100 binc 100")
 
-    assert adjusted.search_depth == 0
+    assert adjusted.search_depth == 1
     assert adjusted.dialectic_depth == 0
     assert adjusted.search_backend == "alphabeta"
     assert not adjusted.reply_mate_scan
 
 
-def test_uci_go_uses_depth_zero_when_fast_clock_is_short() -> None:
+def test_uci_go_keeps_depth_when_fast_clock_is_playable() -> None:
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
     from dialectical_chess.uci import settings_for_go
@@ -185,7 +185,33 @@ def test_uci_go_uses_depth_zero_when_fast_clock_is_short() -> None:
 
     adjusted = settings_for_go(settings, board, "go wtime 10000 btime 30000 winc 100 binc 100")
 
-    assert adjusted.search_depth == 0
+    assert adjusted is settings
+
+
+def test_uci_go_keeps_depth_at_twenty_five_seconds() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 25000 btime 30000 winc 200 binc 200")
+
+    assert adjusted is settings
+
+
+def test_uci_go_uses_depth_one_when_clock_is_short() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 5500 btime 30000 winc 100 binc 100")
+
+    assert adjusted.search_depth == 1
     assert adjusted.dialectic_depth == 0
     assert adjusted.search_backend == "alphabeta"
     assert not adjusted.reply_mate_scan
@@ -220,10 +246,7 @@ def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
 
     adjusted = settings_for_go(settings, board, "go wtime 15000 btime 30000 winc 200 binc 200")
 
-    assert adjusted.search_depth == 1
-    assert adjusted.search_backend == "alphabeta"
-    assert adjusted.dialectic_depth == 0
-    assert not adjusted.reply_mate_scan
+    assert adjusted is settings
 
 
 def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
