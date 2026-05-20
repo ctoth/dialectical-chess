@@ -2225,6 +2225,52 @@ def test_medium_refuted_pawn_capture_gets_forced_mate_depth_three_objection() ->
     assert decision.move_uci in {"d4d5", "e3d2"}
 
 
+def test_low_clock_low_mobility_pawn_push_gets_forced_mate_depth_three_objection() -> None:
+    board = owned_board_from_fen("r6k/r6p/1p2B1pP/p2Np3/4P3/P3B3/1PP3P1/2K2R2 b - - 4 29")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=2,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+            positional_reasons=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_3:a7a6" in probes["a7a6"].objections
+    assert "tactical:allows_reply_forced_mate_in_3:a5a4" in probes["a5a4"].objections
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            dialectic_depth=2,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+            positional_reasons=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci in {
+        "a8g8",
+        "a8e8",
+        "a8d8",
+        "a8c8",
+        "a8b8",
+        "a7g7",
+        "a7f7",
+        "a7e7",
+        "a7d7",
+        "a7c7",
+        "a7b7",
+        "g6g5",
+        "b6b5",
+    }
+
+
 def test_reply_mate_attack_is_not_defeated_by_defended_label() -> None:
     board = owned_board_from_fen("r1bq1k1r/pp1p2pp/3N4/2p1N3/P2p4/RQn5/1P3PPP/2B1RBK1 b - - 2 21")
     probes = probe_moves(
