@@ -135,6 +135,23 @@ def test_argument_selector_prefers_tactical_support_over_positional_count() -> N
     assert selected.uci == "e5f6"
 
 
+def test_argument_selector_uses_effective_score_before_raw_material_tie_break() -> None:
+    board = owned_board_from_fen("r1bqk2r/1pppbppp/p1n1pn2/8/2B1P3/2N5/PPPPNPPP/R1BQK2R w KQkq - 4 6")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "c3d5"
+
+
 @pytest.mark.parametrize(
     ("puzzle_id", "fen", "expected_uci"),
     [

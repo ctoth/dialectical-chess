@@ -133,8 +133,8 @@ def selection_key(
     return (
         -accepted_tactical,
         unresolved_attacks,
-        -material_or_promotion_gain(probe),
         -effective_score(probe, mode),
+        -material_or_promotion_gain(probe),
         -accepted_defenses,
         -move_rank,
         -accepted_positional,
@@ -163,8 +163,8 @@ def support_selection_key(
     return (
         -accepted_tactical,
         unresolved_attacks,
-        -material_or_promotion_gain(probe),
         -effective_score(probe, mode),
+        -material_or_promotion_gain(probe),
         -accepted_defenses,
         -accepted_positional,
         probe.uci,
@@ -191,8 +191,8 @@ def categoriser_selection_key(
     return (
         -accepted_tactical_support_count(probe, graph),
         unresolved_attack_count(probe, graph),
-        -material_or_promotion_gain(probe),
         -effective_score(probe, mode),
+        -material_or_promotion_gain(probe),
         -move_rank,
         -effective_positional_support_count(probe, graph, mode),
         probe.uci,
