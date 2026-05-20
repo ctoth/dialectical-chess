@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TextIO
 
 from dialectical_chess.board import START_FEN
@@ -59,9 +60,10 @@ def run_uci(
             except ValueError as exc:
                 _uci_write(output_stream, f"info string invalid position: {exc}")
         elif command.startswith("go") or command == "stop":
+            move_settings = settings_for_go(settings, board, command)
             _uci_write(
                 output_stream,
-                "bestmove " + choose_uci_move(board, settings=settings, output_stream=output_stream),
+                "bestmove " + choose_uci_move(board, settings=move_settings, output_stream=output_stream),
             )
         elif command == "quit":
             return 0
@@ -148,6 +150,34 @@ def choose_uci_move(
             )
         _uci_write(output_stream, f"info score cp {decision.selected.score} pv {decision.move_uci}")
     return decision.move_uci
+
+
+def settings_for_go(settings: EngineSettings, board, command: str) -> EngineSettings:
+    if not command.startswith("go"):
+        return settings
+    remaining = own_remaining_ms(board, command)
+    if remaining is None:
+        return settings
+    search_depth = settings.search_depth
+    if remaining <= 2_000:
+        search_depth = min(search_depth, 0)
+    elif remaining <= 7_000:
+        search_depth = min(search_depth, 1)
+    if search_depth == settings.search_depth:
+        return settings
+    return replace(settings, search_depth=search_depth)
+
+
+def own_remaining_ms(board, command: str) -> int | None:
+    tokens = command.split()
+    field = "wtime" if board.turn == "w" else "btime"
+    for index, token in enumerate(tokens[:-1]):
+        if token == field:
+            try:
+                return int(tokens[index + 1])
+            except ValueError:
+                return None
+    return None
 
 
 def _uci_write(output_stream: TextIO, line: str) -> None:
