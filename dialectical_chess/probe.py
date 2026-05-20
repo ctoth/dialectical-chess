@@ -576,7 +576,7 @@ def scan_forced_reply_mates_for_candidate_moves(
         return probes
     move_by_uci = {move.uci(): move for move in legal_moves}
     updated: dict[str, MoveProbe] = {}
-    for probe in sorted(probes, key=lambda candidate: (-candidate.score, candidate.uci))[:4]:
+    for probe in sorted(probes, key=lambda candidate: (-candidate.score, candidate.uci))[:12]:
         move = move_by_uci[probe.uci]
         if not should_scan_reply_forced_mate(
             search_depth,
