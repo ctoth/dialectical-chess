@@ -132,6 +132,15 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             )
             objections.extend(minor_retreat_objections)
             score += minor_retreat_score
+            minor_tempo_objections, minor_tempo_score = opening_minor_tempo_objections(
+                board,
+                move,
+                captured_value=captured_value,
+                gives_check=gives_check,
+                reasons=reasons,
+            )
+            objections.extend(minor_tempo_objections)
+            score += minor_tempo_score
             king_objections, king_score = opening_king_safety_objections(
                 board,
                 move,
@@ -478,6 +487,29 @@ def opening_minor_retreat_objections(
     if not retreats_to_home_ranks:
         return (), 0
     return ((f"opening:minor_retreat:{move.uci()}",), -400)
+
+
+def opening_minor_tempo_objections(
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int,
+    gives_check: bool,
+    reasons: list[str],
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() not in {"n", "b"}:
+        return (), 0
+    if board.fullmove_number > 20 or captured_value > 0 or gives_check:
+        return (), 0
+    if is_minor_home_square(move.from_square, piece):
+        return (), 0
+    color = piece_color(piece)
+    if king_is_castled(board, color):
+        return (), 0
+    if any(is_direct_tactical_warrant(reason) for reason in reasons):
+        return (), 0
+    return ((f"opening:minor_tempo_before_castling:{move.uci()}",), -500)
 
 
 def is_minor_home_square(square: int, piece: str) -> bool:
