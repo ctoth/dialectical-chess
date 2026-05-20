@@ -152,6 +152,23 @@ def test_argument_selector_uses_effective_score_before_raw_material_tie_break() 
     assert decision.move_uci == "c3d5"
 
 
+def test_argument_selector_keeps_piece_safety_score_in_tactical_mode() -> None:
+    board = owned_board_from_fen("4k3/2P2rpp/1p1B4/pN1rP3/P4p2/5N1P/5PP1/2R1R1K1 b - - 0 32")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=2,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "f7d7"
+
+
 def test_exchange_nonnegative_does_not_count_as_extra_tactical_support() -> None:
     board = owned_board_from_fen("rnbqk1nr/ppp1bppp/4p3/3P4/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 1 4")
 

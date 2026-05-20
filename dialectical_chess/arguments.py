@@ -264,11 +264,19 @@ def positional_support_mode(graph: RootArgumentGraph, *, include_positional: boo
 def effective_score(probe: MoveProbe, mode: str) -> int:
     if mode == "quiet":
         return probe.score
-    return probe.score - POSITIONAL_SCORE_BONUS * positional_reason_count(probe)
+    return probe.score - POSITIONAL_SCORE_BONUS * soft_positional_reason_count(probe)
 
 
 def positional_reason_count(probe: MoveProbe) -> int:
     return sum(1 for reason in probe.reasons if is_positional_reason(reason))
+
+
+def soft_positional_reason_count(probe: MoveProbe) -> int:
+    return sum(
+        1
+        for reason in probe.reasons
+        if is_positional_reason(reason) and not reason.startswith("piece_safety:")
+    )
 
 
 def material_or_promotion_gain(probe: MoveProbe) -> int:
