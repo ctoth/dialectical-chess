@@ -258,6 +258,37 @@ def test_argument_selector_rejects_trapped_queen_capture() -> None:
     assert decision.move_uci != "g7g8"
 
 
+def test_premature_queen_objection_beats_tactical_count_tie_breaks() -> None:
+    safe = MoveProbe(
+        uci="g8f6",
+        san="g8f6",
+        score=40,
+        is_checkmate=False,
+        gives_check=False,
+        is_capture=False,
+        captured_value=0,
+        promotion_value=0,
+        reasons=("development:g8f6:minor_piece",),
+        objections=(),
+    )
+    queen_move = MoveProbe(
+        uci="d8e7",
+        san="d8e7",
+        score=100,
+        is_checkmate=False,
+        gives_check=False,
+        is_capture=False,
+        captured_value=0,
+        promotion_value=0,
+        reasons=("tactical:threat:targets:1:value:900",),
+        objections=("opening:premature_queen:d8e7:undeveloped_minors:2",),
+    )
+    probes = [queen_move, safe]
+    graph = build_root_argument_graph(probes)
+
+    assert choose_move(probes, graph, selector_mode="argument") == safe
+
+
 def test_argument_selector_rejects_search_proven_forced_mate() -> None:
     board = owned_board_from_fen("4k2r/1p2bppp/p4n2/6N1/P3rn2/4Q3/1P1P1K1q/R1B5 w k - 0 24")
 
