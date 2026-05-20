@@ -7,7 +7,7 @@ from typing import Any
 
 import chess
 
-from dialectical_chess.arguments import MoveProbe, tactical_threat_value
+from dialectical_chess.arguments import MoveProbe
 from dialectical_chess.board import (
     OwnedBoard,
     file_of,
@@ -195,12 +195,6 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 objections.append(f"search:{settings.search.backend}:{search_result.score}")
                 objections.append(f"search_refutes:{settings.search.backend}:{search_result.score}")
                 objections.append(search_line_label)
-                if (
-                    search_result.score <= -700
-                    and has_tactical_threat_at_least(reasons, 1_000)
-                ):
-                    objections.append(f"tactical:search_refuted_overreach:{move.uci()}:{search_result.score}")
-                    score -= 700
             score += search_result.score
             if (
                 settings.search.depth == 1
@@ -779,8 +773,6 @@ def should_scan_reply_forced_mate(
 ) -> bool:
     if search_depth not in {0, 1, 2}:
         return False
-    if has_search_refuted_overreach(objections) and not has_large_search_refutation(objections):
-        return False
     piece = board.piece_at(move.from_square)
     if piece is None:
         return False
@@ -847,17 +839,6 @@ def has_material_capture_at_least(reasons: list[str], threshold: int) -> bool:
         except ValueError:
             continue
     return False
-
-
-def has_tactical_threat_at_least(reasons: list[str], threshold: int) -> bool:
-    return any(tactical_threat_value(reason) >= threshold for reason in reasons)
-
-
-def has_search_refuted_overreach(objections: list[str]) -> bool:
-    return any(
-        objection.startswith("tactical:search_refuted_overreach:")
-        for objection in objections
-    )
 
 
 def king_ring_attack_count(board: OwnedBoard) -> int:
