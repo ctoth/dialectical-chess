@@ -589,7 +589,7 @@ def scan_forced_reply_mates_for_candidate_moves(
 ) -> list[MoveProbe]:
     if search_depth not in {1, 2}:
         return probes
-    candidate_limit = 6 if search_depth == 1 else 12
+    candidate_limit = 6 if search_depth == 1 else 8
     move_by_uci = {move.uci(): move for move in legal_moves}
     legal_move_count = len(legal_moves)
     scan_depth_one_mate_three = (
