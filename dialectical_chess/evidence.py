@@ -14,6 +14,7 @@ class EvidenceWorld(str, Enum):
     MATERIAL = "material"
     TERMINAL = "terminal"
     PROCEDURAL = "procedural"
+    REPLY = "reply"
     UNKNOWN = "unknown"
 
 
@@ -76,6 +77,8 @@ def to_argument_evidence(label: str) -> ArgumentEvidence:
 
 
 def evidence_world(label: str) -> EvidenceWorld:
+    if label.startswith("reply_"):
+        return EvidenceWorld.REPLY
     if label.startswith("search"):
         return EvidenceWorld.SEARCH
     if label.startswith("smt:"):
@@ -147,3 +150,7 @@ def search_support_score(label: str) -> int | None:
         return int(parts[2])
     except ValueError:
         return None
+
+
+def is_undefended_reply_capture(label: str) -> bool:
+    return label.startswith("reply_captures_moved_piece:undefended:")

@@ -7,10 +7,12 @@ from typing import Any
 
 from argumentation.dung import ArgumentationFramework, grounded_extension
 from argumentation.ranking import categoriser_scores
+from argumentation.vaf import ValueBasedArgumentationFramework
 
 from dialectical_chess.evidence import (
     ArgumentEvidence,
     EvidenceWorld,
+    is_undefended_reply_capture,
     search_refutation_score,
     to_argument_evidence,
 )
@@ -548,16 +550,20 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
         arguments.add(move_arg)
         arguments.add(doubt_arg)
         defeats.add((doubt_arg, move_arg))
+        support_args: list[str] = []
+        objection_defeater_args: list[str] = []
         for reason in probe.reasons:
             reason_arg = f"reason:{probe.uci}:{reason}"
             arguments.add(reason_arg)
             reason_evidence = to_argument_evidence(reason)
             evidence[reason_arg] = reason_evidence
             if reason_evidence.supports_argument:
+                support_args.append(reason_arg)
                 defeats.add((reason_arg, doubt_arg))
                 for index in range(extra_support_copies(reason_evidence)):
                     support_arg = f"support:{probe.uci}:{reason}:{index}"
                     arguments.add(support_arg)
+                    support_args.append(support_arg)
                     defeats.add((support_arg, doubt_arg))
             if reason == "terminal:checkmate":
                 for other in probes:
@@ -577,17 +583,26 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
             for defeater in objection_defeaters(probe, objection):
                 defeater_arg = f"defeater:{probe.uci}:{defeater}"
                 arguments.add(defeater_arg)
+                objection_defeater_args.append(defeater_arg)
                 for target_arg in objection_args:
                     defeats.add((defeater_arg, target_arg))
                 for index in range(extra_defeater_copies(defeater)):
                     support_arg = f"defeater:{probe.uci}:{defeater}:{index}"
                     arguments.add(support_arg)
+                    objection_defeater_args.append(support_arg)
                     for target_arg in objection_args:
                         defeats.add((support_arg, target_arg))
         for reply_attack in probe.reply_attacks:
             reply_arg = f"reply_attack:{probe.uci}:{reply_attack}"
             arguments.add(reply_arg)
+            reply_evidence = to_argument_evidence(reply_attack)
+            evidence[reply_arg] = reply_evidence
             defeats.add((reply_arg, move_arg))
+            if is_undefended_reply_capture(reply_evidence.label):
+                for support_arg in support_args:
+                    defeats.add((reply_arg, support_arg))
+                for defeater_arg in objection_defeater_args:
+                    defeats.add((reply_arg, defeater_arg))
             for index in range(extra_reply_attack_copies(reply_attack)):
                 weighted_reply_arg = f"reply_attack:{probe.uci}:{reply_attack}:{index}"
                 arguments.add(weighted_reply_arg)
@@ -604,7 +619,7 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
     frozen_arguments = frozenset(arguments)
     frozen_defeats = frozenset(defeats)
     grounded_extension = local_grounded_extension(frozen_arguments, frozen_defeats)
-    ranking = local_argumentation_ranking(frozen_arguments, frozen_defeats)
+    ranking = local_argumentation_ranking(frozen_arguments, frozen_defeats, evidence)
     return RootArgumentGraph(
         arguments=frozen_arguments,
         defeats=frozen_defeats,
@@ -630,11 +645,34 @@ def build_argument_payload(
     }
 
 
+ARGUMENT_VALUES = frozenset(
+    {
+        "terminal",
+        "reply_refutation",
+        "material_safety",
+        "search",
+        "tactical",
+        "positional",
+        "procedural",
+    }
+)
+AUDIENCE = (
+    "terminal",
+    "reply_refutation",
+    "material_safety",
+    "search",
+    "tactical",
+    "positional",
+    "procedural",
+)
+
+
 def local_argumentation_ranking(
     arguments: frozenset[str],
     defeats: frozenset[tuple[str, str]],
+    evidence: dict[str, ArgumentEvidence] | None = None,
 ) -> dict[str, Any]:
-    framework = ArgumentationFramework(arguments=arguments, defeats=defeats)
+    framework = value_induced_framework(arguments, defeats, evidence or {})
     result = categoriser_scores(framework)
     return {
         "scores": dict(sorted(result.scores.items())),
@@ -642,7 +680,112 @@ def local_argumentation_ranking(
         "converged": result.converged,
         "iterations": result.iterations,
         "semantics": result.semantics,
+        "attack_semantics": "value_based_defeater_undercut",
     }
+
+
+def value_induced_framework(
+    arguments: frozenset[str],
+    defeats: frozenset[tuple[str, str]],
+    evidence: dict[str, ArgumentEvidence],
+) -> ArgumentationFramework:
+    framework = ValueBasedArgumentationFramework(
+        arguments=arguments,
+        attacks=defeats,
+        values=ARGUMENT_VALUES,
+        valuation={argument: argument_value(argument, evidence) for argument in arguments},
+        audience=AUDIENCE,
+    )
+    return ArgumentationFramework(
+        arguments=arguments,
+        defeats=preference_undercut_attacks(defeats, framework),
+    )
+
+
+def preference_undercut_attacks(
+    defeats: frozenset[tuple[str, str]],
+    framework: ValueBasedArgumentationFramework,
+) -> frozenset[tuple[str, str]]:
+    attackers_by_target: dict[str, list[str]] = {}
+    for attacker, target in defeats:
+        attackers_by_target.setdefault(target, []).append(attacker)
+    active: set[tuple[str, str]] = set()
+    for attacker, target in defeats:
+        if not attacker.startswith("defeater:"):
+            active.add((attacker, target))
+            continue
+        attacker_value = framework.valuation[attacker]
+        undercut = any(
+            framework.value_preferred(framework.valuation[undercutter], attacker_value)
+            for undercutter in attackers_by_target.get(attacker, [])
+        )
+        if not undercut:
+            active.add((attacker, target))
+    return frozenset(active)
+
+
+def argument_value(argument: str, evidence: dict[str, ArgumentEvidence]) -> str:
+    if argument.startswith("move:") or argument.startswith("doubt:"):
+        return "procedural"
+    if argument.startswith("reply_attack:"):
+        return reply_attack_value(argument)
+    if argument.startswith("defeater:"):
+        return defeater_value(argument)
+    argument_evidence = evidence.get(argument)
+    if argument_evidence is not None:
+        return evidence_value(argument_evidence)
+    if argument.startswith("support:"):
+        return support_argument_value(argument)
+    if argument.startswith("objection:") or argument.startswith("safety:"):
+        return objection_value(argument)
+    return "procedural"
+
+
+def evidence_value(evidence: ArgumentEvidence) -> str:
+    if evidence.world == EvidenceWorld.TERMINAL:
+        return "terminal"
+    if evidence.world == EvidenceWorld.SEARCH:
+        return "search"
+    if evidence.world in {EvidenceWorld.TACTICAL, EvidenceWorld.SMT, EvidenceWorld.MATERIAL}:
+        return "tactical"
+    if evidence.world == EvidenceWorld.POSITIONAL:
+        return "positional"
+    if evidence.world == EvidenceWorld.REPLY:
+        return reply_attack_value(evidence.label)
+    return "procedural"
+
+
+def reply_attack_value(label: str) -> str:
+    if "reply_mate:" in label or "reply_captures_moved_piece:undefended:" in label:
+        return "reply_refutation"
+    return "tactical"
+
+
+def defeater_value(argument: str) -> str:
+    if ":search_support" in argument:
+        return "search"
+    if ":advanced_flank_pawn_response" in argument:
+        return "positional"
+    if ":compensating_forcing_pressure" in argument or ":forcing_material_gain" in argument:
+        return "material_safety"
+    return "tactical"
+
+
+def support_argument_value(argument: str) -> str:
+    parts = argument.split(":")
+    if len(parts) < 4:
+        return "procedural"
+    return evidence_value(to_argument_evidence(":".join(parts[2:-1])))
+
+
+def objection_value(argument: str) -> str:
+    if "safety:" in argument:
+        return "material_safety"
+    if "search_refutes:" in argument:
+        return "search"
+    if "tactical:allows_reply" in argument:
+        return "reply_refutation"
+    return "tactical"
 
 
 def local_grounded_extension(
