@@ -523,6 +523,23 @@ def test_argument_selector_rejects_reply_mate_without_search_depth() -> None:
     assert decision.move_uci != "c2c4"
 
 
+def test_argument_selector_rejects_reply_mate_at_low_search_depth() -> None:
+    board = owned_board_from_fen("r3kb1r/1bp2pp1/pp1np3/6qp/N1BQ1n2/8/PPPP1PPP/R1B2RK1 w kq - 6 15")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "g2g4"
+
+
 def test_uncastled_flank_pawn_push_gets_king_safety_objection() -> None:
     board = owned_board_from_fen("r3k1nr/5ppp/p7/2b2q2/PnP2P2/1Q1p4/1P1P2PP/R1B1K1NR w KQkq - 2 14")
     probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}
