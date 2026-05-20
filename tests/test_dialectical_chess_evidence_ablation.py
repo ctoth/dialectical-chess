@@ -169,6 +169,40 @@ def test_exchange_nonnegative_does_not_count_as_extra_tactical_support() -> None
     assert decision.move_uci == "f1b5"
 
 
+def test_opening_minor_retreat_gets_development_objection() -> None:
+    board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/2n5/p2P4/8/2N5/PPP2PPP/R1BQKBNR b KQkq - 0 5")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_fork=False,
+        )
+    }
+
+    assert "opening:minor_retreat:c6a7" in probes["c6a7"].objections
+    assert "opening:minor_retreat:c6b8" in probes["c6b8"].objections
+    assert "opening:minor_retreat:c6b4" not in probes["c6b4"].objections
+
+
+def test_argument_selector_rejects_opening_minor_retreat() -> None:
+    board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/2n5/p2P4/8/2N5/PPP2PPP/R1BQKBNR b KQkq - 0 5")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "c6b4"
+
+
 def test_opening_king_walk_gets_safety_objection() -> None:
     board = owned_board_from_fen("r2qk1nr/ppp2ppp/2nbb3/1B6/8/2N5/PPPP1PPP/R1BQK1NR w KQkq - 4 6")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

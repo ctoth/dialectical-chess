@@ -118,6 +118,14 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             )
             objections.extend(opening_objections)
             score += opening_score
+            minor_retreat_objections, minor_retreat_score = opening_minor_retreat_objections(
+                board,
+                move,
+                captured_value=captured_value,
+                gives_check=gives_check,
+            )
+            objections.extend(minor_retreat_objections)
+            score += minor_retreat_score
             king_objections, king_score = opening_king_safety_objections(board, move)
             objections.extend(king_objections)
             score += king_score
@@ -315,6 +323,40 @@ def undeveloped_minor_count(board: OwnedBoard, color: str) -> int:
         for square, piece in zip(home_squares, expected, strict=True)
         if board.piece_at(square) == piece
     )
+
+
+def opening_minor_retreat_objections(
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int,
+    gives_check: bool,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() not in {"n", "b"}:
+        return (), 0
+    if board.fullmove_number > 20 or captured_value > 0 or gives_check:
+        return (), 0
+    color = piece_color(piece)
+    if is_minor_home_square(move.from_square, piece):
+        return (), 0
+    to_rank = rank_of(move.to_square)
+    retreats_to_home_ranks = to_rank <= 1 if color == "w" else to_rank >= 6
+    if not retreats_to_home_ranks:
+        return (), 0
+    return ((f"opening:minor_retreat:{move.uci()}",), -400)
+
+
+def is_minor_home_square(square: int, piece: str) -> bool:
+    if piece == "N":
+        return square in {square_index("b1"), square_index("g1")}
+    if piece == "B":
+        return square in {square_index("c1"), square_index("f1")}
+    if piece == "n":
+        return square in {square_index("b8"), square_index("g8")}
+    if piece == "b":
+        return square in {square_index("c8"), square_index("f8")}
+    return False
 
 
 def opening_king_safety_objections(
