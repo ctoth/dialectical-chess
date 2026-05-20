@@ -2395,6 +2395,79 @@ def test_selected_shallow_search_move_is_reranked_when_forced_mate_refutes_it() 
     }
 
 
+def test_selected_shallow_search_fork_is_reranked_when_mate_in_four_refutes_it() -> None:
+    board = owned_board_from_fen("4qr2/5kpp/5bn1/3p1p2/PpbP4/4QPB1/1P3RPP/4K3 w - - 3 29")
+
+    analysis = DialecticalChessEngine(
+        EngineSettings(
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+            selector_mode="argument",
+            positional_reasons=True,
+        )
+    ).analyze(board)
+    probes = {probe.uci: probe for probe in analysis.probes}
+
+    assert "tactical:allows_reply_forced_mate_in_4:g3d6" in probes["g3d6"].objections
+    assert probes["g3d6"].score == 700
+    assert analysis.decision.move_uci in {
+        "g3e5",
+        "g3f4",
+        "e3e8",
+        "e3e7",
+        "e3e6",
+        "e3e5",
+        "e3e4",
+        "e3e2",
+        "f2e2",
+        "f2d2",
+        "f2c2",
+        "e1d2",
+        "e1d1",
+        "a4a5",
+        "h2h3",
+        "b2b3",
+        "h2h4",
+    }
+
+
+def test_selected_shallow_search_rook_move_is_reranked_when_mate_in_four_refutes_it() -> None:
+    board = owned_board_from_fen("2k4r/pr4pp/2p1N3/p2pPp2/3P4/P7/1PQ2PPP/R4R1K b - - 1 22")
+
+    analysis = DialecticalChessEngine(
+        EngineSettings(
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+            selector_mode="argument",
+            positional_reasons=True,
+        )
+    ).analyze(board)
+    probes = {probe.uci: probe for probe in analysis.probes}
+
+    assert "tactical:allows_reply_forced_mate_in_4:b7d7" in probes["b7d7"].objections
+    assert probes["b7d7"].score == -1180
+    assert analysis.decision.move_uci in {
+        "h8f8",
+        "h8d8",
+        "c8b8",
+        "c8d7",
+        "b7f7",
+        "b7e7",
+        "b7c7",
+        "b7b6",
+        "b7b3",
+        "b7b2",
+        "a7a6",
+        "c6c5",
+    }
+
+
 def test_checking_knight_fork_gets_en_pris_objection_when_queen_can_capture() -> None:
     board = owned_board_from_fen("r1bqk2r/ppppn1pp/3bpp2/8/1nBPP3/P1N2N2/1PP1QPPP/R1B1K2R b KQkq - 0 7")
 
