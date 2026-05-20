@@ -695,6 +695,7 @@ def scan_forced_reply_mates_for_candidate_moves(
             board,
             move_by_uci,
             current_probes,
+            dialectic_depth=dialectic_depth,
             search_depth=search_depth,
             candidate_limit=min(candidate_limit, remaining_budget),
             legal_move_count=legal_move_count,
@@ -746,6 +747,7 @@ def forced_reply_mate_scan_candidates(
     move_by_uci: dict[str, Any],
     probes: list[MoveProbe],
     *,
+    dialectic_depth: int,
     search_depth: int,
     candidate_limit: int,
     legal_move_count: int,
@@ -753,6 +755,11 @@ def forced_reply_mate_scan_candidates(
     eligible = [
         probe
         for probe in probes
+        if should_consider_forced_reply_mate_candidate(
+            probe,
+            dialectic_depth=dialectic_depth,
+            search_depth=search_depth,
+        )
         if should_scan_reply_forced_mate(
             search_depth,
             board,
@@ -781,6 +788,17 @@ def forced_reply_mate_scan_candidates(
         if len(selected) >= candidate_limit:
             break
     return list(selected.values())
+
+
+def should_consider_forced_reply_mate_candidate(
+    probe: MoveProbe,
+    *,
+    dialectic_depth: int,
+    search_depth: int,
+) -> bool:
+    if search_depth == 0 and dialectic_depth != 0:
+        return not (probe.gives_check or probe.captured_value > 0 or probe.promotion_value > 0)
+    return True
 
 
 def forced_reply_mate_depths(
