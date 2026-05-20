@@ -335,17 +335,18 @@ def queen_flank_invasion_objections(
     color = piece_color(board.piece_at(move.from_square) or ("P" if board.turn == "w" else "p"))
     vulnerable = king_flank_pawn_squares(color)
     labels: list[str] = []
-    for reply in child.legal_moves():
-        reply_piece = child.piece_at(reply.from_square)
-        captured = child.piece_at(reply.to_square)
-        if (
-            reply_piece is not None
-            and reply_piece.lower() == "q"
-            and captured is not None
-            and captured.lower() == "p"
-            and reply.to_square in vulnerable
-        ):
-            labels.append(f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(reply.to_square)}")
+    opponent = child.turn
+    for queen_square, queen in enumerate(child.squares):
+        if queen is None or queen.lower() != "q" or piece_color(queen) != opponent:
+            continue
+        for target in vulnerable:
+            captured = child.piece_at(target)
+            if (
+                captured is not None
+                and captured.lower() == "p"
+                and moved_piece_attacks_square(child, queen_square, target, queen)
+            ):
+                labels.append(f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(target)}")
     if not labels:
         return (), 0
     return tuple(sorted(set(labels))), -1_000
