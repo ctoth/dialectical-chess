@@ -572,7 +572,7 @@ def scan_forced_reply_mates_for_candidate_moves(
     *,
     search_depth: int,
 ) -> list[MoveProbe]:
-    if search_depth > 2:
+    if search_depth != 2:
         return probes
     move_by_uci = {move.uci(): move for move in legal_moves}
     updated: dict[str, MoveProbe] = {}
@@ -641,7 +641,7 @@ def should_scan_reply_forced_mate(
     reasons: list[str],
     objections: list[str],
 ) -> bool:
-    if search_depth > 2:
+    if search_depth != 2:
         return False
     piece = board.piece_at(move.from_square)
     if piece is None:
