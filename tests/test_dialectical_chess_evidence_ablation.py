@@ -614,50 +614,6 @@ def test_depth_zero_candidate_scan_runs_with_dialectic_reply_analysis() -> None:
     }
 
 
-def test_depth_zero_scans_quiet_queen_candidate_for_mate_three() -> None:
-    board = owned_board_from_fen("2kr1b1r/p1pbq1pp/1p1p2n1/3P1p2/1P6/R1NQ1NP1/2P1BP1P/2B1K2R b K - 3 14")
-
-    probes = {
-        probe.uci: probe
-        for probe in probe_moves(
-            board,
-            dialectic_depth=2,
-            search_depth=0,
-            search_backend="alphabeta",
-            smt_mate=False,
-            smt_fork=True,
-        )
-    }
-
-    assert "tactical:allows_reply_forced_mate_in_3:e7e8" in probes["e7e8"].objections
-
-    decision = DialecticalChessEngine(
-        EngineSettings(
-            selector_mode="argument",
-            dialectic_depth=2,
-            search_depth=0,
-            search_backend="alphabeta",
-            smt_mate=False,
-            smt_fork=True,
-        )
-    ).choose_move(board)
-
-    assert decision.move_uci in {
-        "d8e8",
-        "c8b8",
-        "e7e2",
-        "d7e8",
-        "d7e6",
-        "d7c6",
-        "d7b5",
-        "d7a4",
-        "c7c6",
-        "b6b5",
-        "c7c5",
-        "a7a5",
-    }
-
-
 def test_depth_zero_checks_forced_reply_mate_for_top_king_moves() -> None:
     board = owned_board_from_fen("Q4k2/2q3pp/1p6/p4p2/P7/1PP2N2/5PPP/R3R1K1 b - - 0 31")
 

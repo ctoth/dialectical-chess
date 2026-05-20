@@ -814,9 +814,6 @@ def forced_reply_mate_depths(
         return (2, 3)
     if scan_depth_zero_low_mobility_mate_three:
         return (2, 3)
-    piece = board.piece_at(move.from_square)
-    if search_depth == 0 and piece is not None and piece.lower() == "q":
-        return (2, 3)
     if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
         return (2, 3)
     if search_depth in {0, 1}:
