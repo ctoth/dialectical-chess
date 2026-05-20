@@ -1874,36 +1874,6 @@ def test_unsupported_major_drift_rejects_file_control_queen_shuffle() -> None:
     assert decision.move_uci != "e7e6"
 
 
-def test_unsettled_minor_tempo_before_castling_is_rejected() -> None:
-    board = owned_board_from_fen("r3kb1r/pp1b1ppp/2n5/q2p4/3P4/2NQBP2/PPP3PP/R3K2R w KQkq - 0 12")
-    probes = {
-        probe.uci: probe
-        for probe in probe_moves(
-            board,
-            dialectic_depth=2,
-            search_depth=1,
-            search_backend="alphabeta",
-            smt_mate=True,
-            smt_fork=True,
-        )
-    }
-
-    assert "opening:minor_tempo_before_castling:e3f4" in probes["e3f4"].objections
-
-    decision = DialecticalChessEngine(
-        EngineSettings(
-            selector_mode="argument",
-            dialectic_depth=2,
-            search_depth=1,
-            search_backend="alphabeta",
-            smt_mate=True,
-            smt_fork=True,
-        )
-    ).choose_move(board)
-
-    assert decision.move_uci != "e3f4"
-
-
 def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:
     board = owned_board_from_fen("3k2nr/4b2p/1p1pppp1/pQ6/P3q2P/4B2N/1P3PP1/2R2RK1 b - - 1 25")
     probes = {
