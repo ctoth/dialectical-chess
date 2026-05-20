@@ -848,6 +848,66 @@ def test_low_search_depth_checks_forced_reply_mate_for_refuted_pawn_threats() ->
     assert decision.move_uci != "a4a5"
 
 
+def test_low_search_depth_checks_forced_reply_mate_for_deeply_refuted_pawn_pushes() -> None:
+    board = owned_board_from_fen("r3r1k1/2p2ppp/p1p2n1b/5P2/2p5/P4q2/1PKP3P/R1B5 w - - 0 23")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_2:d2d4" in probes["d2d4"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "d2d4"
+
+
+def test_low_search_depth_checks_forced_reply_mate_for_deeply_refuted_flank_pawns() -> None:
+    board = owned_board_from_fen("Q2B1knr/3p1ppp/1p1N4/p3q3/8/2P5/PP2BPPP/R3K1NR b KQ - 2 17")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_2:a5a4" in probes["a5a4"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "a5a4"
+
+
 def test_low_search_depth_checks_forced_reply_mate_for_king_moves() -> None:
     board = owned_board_from_fen("r1b3nr/1p6/1k1Qp3/2p1p1pp/p1B5/P7/1PP2PPP/2KRR3 b - - 1 31")
 

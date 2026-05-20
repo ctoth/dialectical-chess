@@ -577,36 +577,103 @@ def scan_forced_reply_mates_for_candidate_moves(
     candidate_limit = 6 if search_depth == 1 else 12
     move_by_uci = {move.uci(): move for move in legal_moves}
     updated: dict[str, MoveProbe] = {}
-    for probe in sorted(probes, key=lambda candidate: (-candidate.score, candidate.uci))[:candidate_limit]:
-        move = move_by_uci[probe.uci]
-        if not should_scan_reply_forced_mate(
+    scanned: set[str] = set()
+    scan_budget = candidate_limit * 2 if search_depth == 1 else candidate_limit
+    while len(scanned) < scan_budget:
+        current_probes = [updated.get(probe.uci, probe) for probe in probes]
+        made_progress = False
+        remaining_budget = scan_budget - len(scanned)
+        for probe in forced_reply_mate_scan_candidates(
+            board,
+            move_by_uci,
+            current_probes,
+            search_depth=search_depth,
+            candidate_limit=min(candidate_limit, remaining_budget),
+        ):
+            if probe.uci in scanned:
+                continue
+            scanned.add(probe.uci)
+            made_progress = True
+            move = move_by_uci[probe.uci]
+            mate_depths = (2,) if search_depth == 1 else (2, 3)
+            child = board.apply(move)
+            forced_mate_objections: tuple[str, ...] = ()
+            forced_mate_score = 0
+            for mate_depth in mate_depths:
+                forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
+                    child,
+                    move,
+                    mate_depth=mate_depth,
+                )
+                if forced_mate_objections:
+                    break
+            if not forced_mate_objections:
+                continue
+            updated[probe.uci] = replace(
+                probe,
+                score=probe.score + forced_mate_score,
+                objections=probe.objections + forced_mate_objections,
+            )
+        if not made_progress:
+            break
+        if search_depth != 1:
+            break
+        if len(scanned) >= scan_budget:
+            break
+        if not updated:
+            break
+    return [updated.get(probe.uci, probe) for probe in probes]
+
+
+def forced_reply_mate_scan_candidates(
+    board: OwnedBoard,
+    move_by_uci: dict[str, Any],
+    probes: list[MoveProbe],
+    *,
+    search_depth: int,
+    candidate_limit: int,
+) -> list[MoveProbe]:
+    eligible = [
+        probe
+        for probe in probes
+        if should_scan_reply_forced_mate(
             search_depth,
             board,
-            move,
+            move_by_uci[probe.uci],
             reasons=list(probe.reasons),
             objections=list(probe.objections),
-        ):
-            continue
-        mate_depths = (2,) if search_depth == 1 else (2, 3)
-        child = board.apply(move)
-        forced_mate_objections: tuple[str, ...] = ()
-        forced_mate_score = 0
-        for mate_depth in mate_depths:
-            forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
-                child,
-                move,
-                mate_depth=mate_depth,
-            )
-            if forced_mate_objections:
-                break
-        if not forced_mate_objections:
-            continue
-        updated[probe.uci] = replace(
-            probe,
-            score=probe.score + forced_mate_score,
-            objections=probe.objections + forced_mate_objections,
         )
-    return [updated.get(probe.uci, probe) for probe in probes]
+    ]
+    if len(eligible) <= candidate_limit:
+        return sorted(eligible, key=lambda candidate: (-candidate.score, candidate.uci))
+
+    score_budget = max(1, candidate_limit // 2)
+    selected: dict[str, MoveProbe] = {}
+    for probe in sorted(eligible, key=lambda candidate: (-candidate.score, candidate.uci))[:score_budget]:
+        selected[probe.uci] = probe
+    for probe in sorted(
+        eligible,
+        key=lambda candidate: (
+            search_refutation_sort_key(candidate.objections),
+            -candidate.score,
+            candidate.uci,
+        ),
+    ):
+        selected.setdefault(probe.uci, probe)
+        if len(selected) >= candidate_limit:
+            break
+    return list(selected.values())
+
+
+def search_refutation_sort_key(objections: tuple[str, ...]) -> int:
+    scores = []
+    for objection in objections:
+        if not objection.startswith("search_refutes:"):
+            continue
+        parts = objection.split(":")
+        if len(parts) == 3:
+            scores.append(int(parts[2]))
+    return min(scores, default=0)
 
 
 def should_scan_reply_mate(
@@ -658,6 +725,8 @@ def should_scan_reply_forced_mate(
         if piece.lower() == "k":
             return True
         if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objections, -100):
+            return True
+        if piece.lower() == "p" and has_search_refutation_at_most(objections, -1_400):
             return True
         has_threat_reason = any(
             reason.startswith("tactical:threat:")
