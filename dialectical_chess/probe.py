@@ -7,7 +7,7 @@ from typing import Any
 
 import chess
 
-from dialectical_chess.arguments import MoveProbe
+from dialectical_chess.arguments import MoveProbe, tactical_threat_value
 from dialectical_chess.board import (
     OwnedBoard,
     file_of,
@@ -195,6 +195,12 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 objections.append(f"search:{settings.search.backend}:{search_result.score}")
                 objections.append(f"search_refutes:{settings.search.backend}:{search_result.score}")
                 objections.append(search_line_label)
+                if (
+                    search_result.score <= -700
+                    and has_tactical_threat_at_least(reasons, 1_000)
+                ):
+                    objections.append(f"tactical:search_refuted_overreach:{move.uci()}:{search_result.score}")
+                    score -= 700
             score += search_result.score
             if (
                 settings.search.depth == 1
@@ -629,10 +635,10 @@ def scan_forced_reply_mates_for_candidate_moves(
             scanned.add(probe.uci)
             made_progress = True
             move = move_by_uci[probe.uci]
-            mate_depths = (
-                (2, 3)
-                if scan_depth_one_mate_three
-                else ((2,) if search_depth in {0, 1} else (2, 3))
+            mate_depths = forced_reply_mate_depths(
+                probe,
+                search_depth=search_depth,
+                scan_depth_one_mate_three=scan_depth_one_mate_three,
             )
             child = board.apply(move)
             forced_mate_objections: tuple[str, ...] = ()
@@ -704,6 +710,19 @@ def forced_reply_mate_scan_candidates(
         if len(selected) >= candidate_limit:
             break
     return list(selected.values())
+
+
+def forced_reply_mate_depths(
+    probe: MoveProbe,
+    *,
+    search_depth: int,
+    scan_depth_one_mate_three: bool,
+) -> tuple[int, ...]:
+    if scan_depth_one_mate_three:
+        return (2, 3)
+    if search_depth in {0, 1}:
+        return (2,)
+    return (2, 3)
 
 
 def search_refutation_sort_key(objections: tuple[str, ...]) -> int:
@@ -826,6 +845,10 @@ def has_material_capture_at_least(reasons: list[str], threshold: int) -> bool:
         except ValueError:
             continue
     return False
+
+
+def has_tactical_threat_at_least(reasons: list[str], threshold: int) -> bool:
+    return any(tactical_threat_value(reason) >= threshold for reason in reasons)
 
 
 def king_ring_attack_count(board: OwnedBoard) -> int:

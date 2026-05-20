@@ -1059,6 +1059,36 @@ def test_zero_search_depth_checks_forced_reply_mate_for_tactical_threats() -> No
     assert decision.move_uci in {"c4e6", "e2g1", "b2f6", "f1e1", "g2g3", "g2g4"}
 
 
+def test_search_refuted_high_threat_moves_are_marked_as_overreach() -> None:
+    board = owned_board_from_fen("r3kbnr/1bBp1ppp/1p6/n7/4P3/5N2/P1Q1BPPP/1R2R1K1 b kq - 0 16")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:search_refuted_overreach:b7e4:-810" in probes["b7e4"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "b7e4"
+
+
 def test_low_search_depth_checks_forced_reply_mate_for_king_moves() -> None:
     board = owned_board_from_fen("r1b3nr/1p6/1k1Qp3/2p1p1pp/p1B5/P7/1PP2PPP/2KRR3 b - - 1 31")
 
