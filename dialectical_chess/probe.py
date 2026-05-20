@@ -29,9 +29,6 @@ from dialectical_chess.smt import (
 )
 
 
-DEPTH_ZERO_MATE_THREE_LOW_MOBILITY_LIMIT = 16
-
-
 @dataclass(frozen=True)
 class ProbeSettings:
     dialectic_depth: int = 1
@@ -747,10 +744,7 @@ def scan_forced_reply_mates_for_candidate_moves(
         and legal_move_count <= 2
         and board.in_check(board.turn)
     )
-    scan_depth_zero_low_mobility_mate_three = (
-        search_depth == 0
-        and legal_move_count <= DEPTH_ZERO_MATE_THREE_LOW_MOBILITY_LIMIT
-    )
+    scan_depth_zero_positive_mate_three = search_depth == 0
     updated: dict[str, MoveProbe] = {}
     scanned: set[str] = set()
     scan_budget = candidate_limit * 3 if search_depth == 1 else candidate_limit
@@ -778,7 +772,7 @@ def scan_forced_reply_mates_for_candidate_moves(
                 move=move,
                 search_depth=search_depth,
                 scan_depth_one_mate_three=scan_depth_one_mate_three,
-                scan_depth_zero_low_mobility_mate_three=scan_depth_zero_low_mobility_mate_three,
+                scan_depth_zero_positive_mate_three=scan_depth_zero_positive_mate_three,
                 legal_move_count=legal_move_count,
             )
             child = board.apply(move)
@@ -891,12 +885,12 @@ def forced_reply_mate_depths(
     move: Any,
     search_depth: int,
     scan_depth_one_mate_three: bool,
-    scan_depth_zero_low_mobility_mate_three: bool,
+    scan_depth_zero_positive_mate_three: bool,
     legal_move_count: int,
 ) -> tuple[int, ...]:
     if scan_depth_one_mate_three:
         return (2, 3)
-    if scan_depth_zero_low_mobility_mate_three and probe.score > 0:
+    if scan_depth_zero_positive_mate_three and probe.score > 0:
         return (2, 3)
     if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
         return (2, 3)
