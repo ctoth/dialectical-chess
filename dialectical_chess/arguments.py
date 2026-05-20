@@ -334,8 +334,6 @@ def severe_objection_weight(objection: str) -> int:
         return 2
     if objection.startswith("king_safety:unanswered_advanced_flank_pawn:"):
         return 4
-    if objection.startswith("king_safety:castle_into_advanced_flank_pawn:"):
-        return 3
     if objection.startswith("strategy:unsupported_major_drift:"):
         return 1
     if (

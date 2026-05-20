@@ -139,9 +139,6 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             )
             objections.extend(king_objections)
             score += king_score
-            castling_flank_objections, castling_flank_score = castling_into_flank_pawn_objections(board, move)
-            objections.extend(castling_flank_objections)
-            score += castling_flank_score
             flank_pawn_objections, flank_pawn_score = flank_pawn_weakening_objections(board, move)
             objections.extend(flank_pawn_objections)
             score += flank_pawn_score
@@ -516,33 +513,6 @@ def opening_king_safety_objections(
 
 def king_stays_on_home_rank(color: str, square: int) -> bool:
     return rank_of(square) == (0 if color == "w" else 7)
-
-
-def castling_into_flank_pawn_objections(
-    board: OwnedBoard,
-    move: Any,
-) -> tuple[tuple[str, ...], int]:
-    if move.kind != "castle":
-        return (), 0
-    piece = board.piece_at(move.from_square)
-    if piece is None or piece.lower() != "k":
-        return (), 0
-    color = piece_color(piece)
-    kingside = file_of(move.to_square) == 6
-    flank_files = {6, 7} if kingside else {0, 1}
-    labels = []
-    for square, pawn in enumerate(board.squares):
-        if pawn is None or pawn.lower() != "p" or piece_color(pawn) == color:
-            continue
-        if file_of(square) not in flank_files:
-            continue
-        if color == "b" and rank_of(square) >= 4:
-            labels.append(f"king_safety:castle_into_advanced_flank_pawn:{move.uci()}:{square_name(square)}")
-        if color == "w" and rank_of(square) <= 3:
-            labels.append(f"king_safety:castle_into_advanced_flank_pawn:{move.uci()}:{square_name(square)}")
-    if not labels:
-        return (), 0
-    return tuple(sorted(labels)), -1_200
 
 
 def flank_pawn_weakening_objections(
