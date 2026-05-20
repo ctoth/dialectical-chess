@@ -275,7 +275,7 @@ def unsupported_major_drift_objections(
     reasons: list[str],
 ) -> tuple[tuple[str, ...], int]:
     piece = board.piece_at(move.from_square)
-    if piece is None or piece.lower() not in {"q", "r"}:
+    if piece is None or piece.lower() != "q":
         return (), 0
     if board.fullmove_number > 35 or captured_value > 0 or gives_check:
         return (), 0
