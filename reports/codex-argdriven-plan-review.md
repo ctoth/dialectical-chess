@@ -64,7 +64,15 @@ P2.1 says `positional` maps to `KING_SAFETY`/`SPACE`/etc. "by prefix." That is s
 
 Concrete fix: require an exhaustive mapping table covering every label family emitted by `probe.py`, with unknown labels failing closed. If Phase 2 still consumes string labels, say that plainly and add a P3 deletion target; do not imply labels are display-only until `probe.py` emits typed values directly.
 
-### M5. Some review findings are not owned by any chunk
+### M5. P2.2 has load-bearing placeholders, not an executable builder spec
+
+Location: `reviews/PLAN-argumentation-driven.md:447-460`.
+
+The builder sketch calls `move_value(probe)` and `support_tau(ev)` without defining either, elides defeater/reply-attack/defense construction with `...`, and uses Python `assert` for the acyclicity invariant. Those are not harmless pseudocode gaps: move value controls whether objections become defeats, support strength controls gradual accrual, the omitted edge families are part of the current graph's safety behavior, and `assert` disappears under optimized Python.
+
+Concrete fix: before execution, P2.2 must enumerate every node/edge family from the engine report, define `move_value`, define `support_tau`, define the value comparison API used by P2.3, and replace the `assert` with an explicit exception plus a test that verifies topological DF-QuAD on real `probe_moves` output.
+
+### M6. Some review findings are not owned by any chunk
 
 Locations: `reviews/04-substrate.md:153-168`, `reviews/06-tests.md:177-188`, `reviews/03-decision-pipeline.md:305-314`.
 
@@ -102,7 +110,7 @@ The library report correctly proves the pinned modules and APIs exist. The plan 
 
 4. **P2.1/P2.4 — 6-value VAF vs. 2-tier:** keep the 6-value VAF in Phase 2. A 2-tier `SOUNDNESS` vs. rest model would satisfy the hard safety gate but would not prove checklist item 12: that soft value ordering is load-bearing. The fix is to make the mapping exhaustive and fail-closed, not to defer soft values.
 
-5. **P2.5 — `optimizer.py`:** keep it only as a separate research CLI that consumes the same `BipolarMoveGraph` and cannot affect production `choose_move`. Remove it from `EngineSettings.selector_mode` and benchmark selector axes. If rewriting it to the new graph is nontrivial, delete it in P2.5 and reintroduce a new optimizer later.
+5. **P2.5 — `optimizer.py`:** delete it from the Phase 2 production/research surface. It is the last live reason to keep `selection_key`, the reviews already found its fallback reporting untrustworthy, and preserving it creates a second decision path during the decider rewrite. Git history preserves the old experiment; a new optimizer can be reintroduced later against `BipolarMoveGraph` if it becomes a real requirement.
 
 6. **DF-QuAD vs. quadratic energy:** DF-QuAD is correct for the current and proposed layered graph **if** P2.2 enforces acyclicity and P2.4 asserts topological DF-QuAD execution. Prefer quadratic energy only after an intentional feature introduces cycles. The plan must also fix C1: DF-QuAD should run over the value-filtered defeat graph, not raw attacks.
 
