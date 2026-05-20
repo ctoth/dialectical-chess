@@ -648,7 +648,15 @@ def should_scan_reply_forced_mate(
     if piece is None:
         return False
     if search_depth == 1:
-        return piece.lower() != "p" and has_search_refutation_at_most(objections, -700)
+        if piece.lower() == "k":
+            return True
+        has_threat_reason = any(
+            reason.startswith("tactical:threat:")
+            for reason in reasons
+        )
+        return has_search_refutation_at_most(objections, -700) and (
+            piece.lower() != "p" or has_threat_reason
+        )
     if piece.lower() == "k":
         return True
     if has_large_search_refutation(objections):

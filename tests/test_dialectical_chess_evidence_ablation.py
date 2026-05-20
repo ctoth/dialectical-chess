@@ -621,7 +621,7 @@ def test_low_search_depth_checks_reply_mate_for_major_piece_threats() -> None:
     assert decision.move_uci != "a5c5"
 
 
-def test_low_search_depth_checks_forced_reply_mate_for_king_moves() -> None:
+def test_low_search_depth_checks_forced_reply_mate_for_late_king_moves() -> None:
     board = owned_board_from_fen("2q2rk1/1r1pb1pp/p3pn2/Q2N4/bn2P3/3P4/PP3PPP/2KR3R w - - 4 22")
 
     probes = {
@@ -769,6 +769,66 @@ def test_low_search_depth_checks_forced_reply_mate_in_two_for_candidates() -> No
     ).choose_move(board)
 
     assert decision.move_uci != "e4c2"
+
+
+def test_low_search_depth_checks_forced_reply_mate_for_refuted_pawn_threats() -> None:
+    board = owned_board_from_fen("1r4k1/5p1p/pq4p1/5n2/P1p2PQ1/2P5/2PK3P/6Nb w - - 2 30")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_2:a4a5" in probes["a4a5"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "a4a5"
+
+
+def test_low_search_depth_checks_forced_reply_mate_for_king_moves() -> None:
+    board = owned_board_from_fen("r1b3nr/1p6/1k1Qp3/2p1p1pp/p1B5/P7/1PP2PPP/2KRR3 b - - 1 31")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_2:b6a5" in probes["b6a5"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "b6a5"
 
 
 def test_uncastled_flank_pawn_push_gets_king_safety_objection() -> None:
