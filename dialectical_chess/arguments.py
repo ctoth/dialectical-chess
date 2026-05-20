@@ -274,6 +274,8 @@ def severe_objection_weight(objection: str) -> int:
         return 3
     if objection.startswith("safety:queen_blunder:"):
         return 2
+    if is_moved_minor_or_major_en_pris(objection):
+        return 1
     if objection.startswith("king_safety:queen_flank_invasion:"):
         return 2
     if (
@@ -309,6 +311,17 @@ def search_refutation_score(objection: str) -> int | None:
         return int(parts[2])
     except ValueError:
         return None
+
+
+def is_moved_minor_or_major_en_pris(objection: str) -> bool:
+    prefix = "safety:moved_piece_en_pris:"
+    if not objection.startswith(prefix):
+        return False
+    try:
+        value = int(objection.removeprefix(prefix))
+    except ValueError:
+        return False
+    return value >= 300
 
 
 def is_positional_reason(reason: str) -> bool:
