@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import io
-from typing import Hashable
+from typing import Any, Hashable
 
 import chess
 import chess.pgn
@@ -81,10 +81,12 @@ def has_immediate_mate(board: chess.Board) -> bool:
     return has_forced_mate(board, mate_depth=1)
 
 
-def has_forced_mate(board: chess.Board, *, mate_depth: int) -> bool:
+def has_forced_mate(board: Any, *, mate_depth: int) -> bool:
     """Return whether the side to move can force mate within mate_depth moves."""
     if mate_depth < 1:
         raise ValueError("mate_depth must be at least 1")
+    if not isinstance(board, chess.Board):
+        board = chess.Board(board.fen())
     return _has_forced_mate_board(board, mate_depth, cache=FORCED_MATE_CACHE)
 
 
