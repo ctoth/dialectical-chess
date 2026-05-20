@@ -101,6 +101,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 move,
                 child,
                 captured_value=captured_value,
+                gives_check=gives_check,
                 promotion_value=promotion_value,
             )
             reasons.extend(safety_reasons)
@@ -204,6 +205,7 @@ def moved_piece_safety_labels(
     child: OwnedBoard,
     *,
     captured_value: int,
+    gives_check: bool,
     promotion_value: int,
 ) -> tuple[tuple[str, ...], tuple[str, ...], int]:
     moved_piece = board.piece_at(move.from_square)
@@ -222,7 +224,9 @@ def moved_piece_safety_labels(
         score += 15
     if en_pris:
         exchange_gain = captured_value + promotion_value - moved_value
-        if exchange_gain < 0:
+        if gives_check and exchange_gain >= -100:
+            reasons.append(f"tactical:checking_exchange_pressure:{move.uci()}:{exchange_gain}")
+        elif exchange_gain < 0:
             objections.append(f"safety:moved_piece_en_pris:{moved_value}")
             score += exchange_gain
         else:
