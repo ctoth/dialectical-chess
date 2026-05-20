@@ -655,6 +655,7 @@ def scan_forced_reply_mates_for_candidate_moves(
         and legal_move_count <= 2
         and board.in_check(board.turn)
     )
+    scan_depth_zero_low_mobility_mate_three = search_depth == 0 and legal_move_count <= 8
     updated: dict[str, MoveProbe] = {}
     scanned: set[str] = set()
     scan_budget = candidate_limit * 3 if search_depth == 1 else candidate_limit
@@ -681,6 +682,7 @@ def scan_forced_reply_mates_for_candidate_moves(
                 move=move,
                 search_depth=search_depth,
                 scan_depth_one_mate_three=scan_depth_one_mate_three,
+                scan_depth_zero_low_mobility_mate_three=scan_depth_zero_low_mobility_mate_three,
             )
             child = board.apply(move)
             forced_mate_objections: tuple[str, ...] = ()
@@ -760,8 +762,11 @@ def forced_reply_mate_depths(
     move: Any,
     search_depth: int,
     scan_depth_one_mate_three: bool,
+    scan_depth_zero_low_mobility_mate_three: bool,
 ) -> tuple[int, ...]:
     if scan_depth_one_mate_three:
+        return (2, 3)
+    if scan_depth_zero_low_mobility_mate_three:
         return (2, 3)
     if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
         return (2, 3)
