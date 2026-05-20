@@ -619,6 +619,8 @@ def scan_forced_reply_mates_for_candidate_moves(
             move = move_by_uci[probe.uci]
             mate_depths = forced_reply_mate_depths(
                 probe,
+                board=board,
+                move=move,
                 search_depth=search_depth,
                 scan_depth_one_mate_three=scan_depth_one_mate_three,
             )
@@ -696,14 +698,29 @@ def forced_reply_mate_scan_candidates(
 def forced_reply_mate_depths(
     probe: MoveProbe,
     *,
+    board: OwnedBoard,
+    move: Any,
     search_depth: int,
     scan_depth_one_mate_three: bool,
 ) -> tuple[int, ...]:
     if scan_depth_one_mate_three:
         return (2, 3)
+    if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
+        return (2, 3)
     if search_depth in {0, 1}:
         return (2,)
     return (2, 3)
+
+
+def is_deeply_refuted_major_move(
+    board: OwnedBoard,
+    move: Any,
+    objections: tuple[str, ...],
+) -> bool:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() not in {"q", "r"}:
+        return False
+    return has_search_refutation_at_most(list(objections), -1_500)
 
 
 def search_refutation_sort_key(objections: tuple[str, ...]) -> int:
