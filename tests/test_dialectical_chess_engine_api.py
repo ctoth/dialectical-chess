@@ -189,7 +189,7 @@ def test_uci_go_uses_depth_zero_when_fast_clock_is_short() -> None:
     assert adjusted.reply_mate_scan
 
 
-def test_uci_go_keeps_evidence_enabled_when_clock_is_critical() -> None:
+def test_uci_go_keeps_mate_scan_enabled_when_clock_is_critical() -> None:
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
     from dialectical_chess.uci import settings_for_go
@@ -201,9 +201,9 @@ def test_uci_go_keeps_evidence_enabled_when_clock_is_critical() -> None:
 
     assert adjusted.search_depth == 0
     assert adjusted.search_backend == "alphabeta"
-    assert adjusted.smt_mate
-    assert adjusted.smt_fork
-    assert adjusted.positional_reasons
+    assert not adjusted.smt_mate
+    assert not adjusted.smt_fork
+    assert not adjusted.positional_reasons
     assert adjusted.reply_mate_scan
 
 

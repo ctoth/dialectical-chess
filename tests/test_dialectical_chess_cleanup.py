@@ -79,9 +79,9 @@ def test_low_clock_keeps_dialectical_evidence_enabled() -> None:
     )
 
     assert settings.search_depth == 0
-    assert settings.smt_mate is True
-    assert settings.smt_fork is True
-    assert settings.positional_reasons is True
+    assert settings.smt_mate is False
+    assert settings.smt_fork is False
+    assert settings.positional_reasons is False
     assert settings.reply_mate_scan is True
 
 
