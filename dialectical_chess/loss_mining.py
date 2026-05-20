@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import io
 from dataclasses import dataclass
-from functools import lru_cache
+import io
+from typing import Hashable
 
 import chess
 import chess.pgn
+
+FORCED_MATE_CACHE: dict[tuple[Hashable, int], bool] = {}
 
 
 @dataclass(frozen=True)
@@ -83,19 +85,27 @@ def has_forced_mate(board: chess.Board, *, mate_depth: int) -> bool:
     """Return whether the side to move can force mate within mate_depth moves."""
     if mate_depth < 1:
         raise ValueError("mate_depth must be at least 1")
-    return _has_forced_mate_position(position_key(board), mate_depth)
+    return _has_forced_mate_board(board, mate_depth, cache=FORCED_MATE_CACHE)
 
 
-@lru_cache(maxsize=100_000)
-def _has_forced_mate_position(position: str, mate_depth: int) -> bool:
-    board = chess.Board(f"{position} 0 1")
+def _has_forced_mate_board(
+    board: chess.Board,
+    mate_depth: int,
+    *,
+    cache: dict[tuple[Hashable, int], bool],
+) -> bool:
+    cache_key = (position_key(board), mate_depth)
+    if cache_key in cache:
+        return cache[cache_key]
     if board.is_checkmate():
+        cache[cache_key] = True
         return True
 
     for move in board.legal_moves:
         attacker_child = board.copy(stack=False)
         attacker_child.push(move)
         if attacker_child.is_checkmate():
+            cache[cache_key] = True
             return True
         if mate_depth == 1:
             continue
@@ -103,18 +113,24 @@ def _has_forced_mate_position(position: str, mate_depth: int) -> bool:
         if not defender_replies:
             continue
         if all(
-            _has_forced_mate_position(
-                position_key(defender_child(attacker_child, reply)),
+            _has_forced_mate_board(
+                defender_child(attacker_child, reply),
                 mate_depth - 1,
+                cache=cache,
             )
             for reply in defender_replies
         ):
+            cache[cache_key] = True
             return True
+    cache[cache_key] = False
     return False
 
 
-def position_key(board: chess.Board) -> str:
+def position_key(board: chess.Board) -> Hashable:
     """Cache key for legal move generation: board, turn, castling, en passant."""
+    transposition_key = getattr(board, "_transposition_key", None)
+    if transposition_key is not None:
+        return transposition_key()
     return " ".join(board.fen().split()[:4])
 
 
