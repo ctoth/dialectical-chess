@@ -136,6 +136,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             flank_pawn_objections, flank_pawn_score = flank_pawn_weakening_objections(board, move)
             objections.extend(flank_pawn_objections)
             score += flank_pawn_score
+            ignored_objections, ignored_score = ignored_hanging_piece_objections(board, move, child)
+            objections.extend(ignored_objections)
+            score += ignored_score
             flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
             objections.extend(flank_objections)
             score += flank_score
@@ -429,6 +432,47 @@ def flank_pawn_weakening_objections(
     if from_file not in {6, 7}:
         return (), 0
     return ((f"king_safety:flank_pawn_weakening:{move.uci()}",), -900)
+
+
+def ignored_hanging_piece_objections(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], int]:
+    color = board.turn
+    opponent = opposite(color)
+    labels: list[str] = []
+    score = 0
+    for square, piece in enumerate(board.squares):
+        if piece is None or piece_color(piece) != color:
+            continue
+        value = OWNED_PIECE_VALUE[piece.lower()]
+        if value < OWNED_PIECE_VALUE["n"]:
+            continue
+        if not lower_value_attacker_exists(board, square, opponent, value):
+            continue
+        if move.from_square == square:
+            continue
+        if child.piece_at(square) == piece and lower_value_attacker_exists(child, square, opponent, value):
+            labels.append(f"safety:ignored_hanging_piece:{move.uci()}:{square_name(square)}:{value}")
+            score -= value
+    return tuple(labels), score
+
+
+def lower_value_attacker_exists(
+    board: OwnedBoard,
+    square: int,
+    attacker_color: str,
+    target_value: int,
+) -> bool:
+    for attacker_square, attacker in enumerate(board.squares):
+        if attacker is None or piece_color(attacker) != attacker_color:
+            continue
+        if OWNED_PIECE_VALUE[attacker.lower()] >= target_value:
+            continue
+        if moved_piece_attacks_square(board, attacker_square, square, attacker):
+            return True
+    return False
 
 
 def king_is_castled(board: OwnedBoard, color: str) -> bool:

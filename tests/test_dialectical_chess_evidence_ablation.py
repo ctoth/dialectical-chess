@@ -237,6 +237,42 @@ def test_argument_selector_requires_strong_compensation_for_hanging_minor() -> N
     assert decision.move_uci == "e4e5"
 
 
+def test_ignored_hanging_piece_gets_safety_objection() -> None:
+    board = owned_board_from_fen("rnbqkbnr/3p1ppp/p3p3/1p6/2p1P3/1BN5/PPPP1PPP/R1BQK1NR w KQkq - 0 6")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_fork=False,
+        )
+    }
+
+    assert "safety:ignored_hanging_piece:f2f4:b3:330" in probes["f2f4"].objections
+    assert not any(
+        objection.startswith("safety:ignored_hanging_piece:")
+        for objection in probes["b3c4"].objections
+    )
+
+
+def test_argument_selector_saves_hanging_minor() -> None:
+    board = owned_board_from_fen("rnbqkbnr/3p1ppp/p3p3/1p6/2p1P3/1BN5/PPPP1PPP/R1BQK1NR w KQkq - 0 6")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci == "b3c4"
+
+
 def test_opening_king_walk_gets_safety_objection() -> None:
     board = owned_board_from_fen("r2qk1nr/ppp2ppp/2nbb3/1B6/8/2N5/PPPP1PPP/R1BQK1NR w KQkq - 4 6")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

@@ -275,6 +275,8 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
         return 3
     if objection.startswith("safety:queen_blunder:"):
         return 2
+    if objection.startswith("safety:ignored_hanging_piece:"):
+        return 1
     if is_moved_minor_or_major_en_pris(objection):
         if probe is not None and has_compensating_tactical_pressure(probe):
             return 0
