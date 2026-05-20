@@ -122,6 +122,7 @@ def selection_key(
     )
     if mode == "quiet":
         return (
+            severe_objection_count(probe),
             -move_rank,
             -accepted_tactical,
             unresolved_attacks,
@@ -131,6 +132,7 @@ def selection_key(
             probe.uci,
         )
     return (
+        severe_objection_count(probe),
         -accepted_tactical,
         unresolved_attacks,
         -effective_score(probe, mode),
@@ -153,6 +155,7 @@ def support_selection_key(
     unresolved_attacks = unresolved_attack_count(probe, graph)
     if mode == "quiet":
         return (
+            severe_objection_count(probe),
             -accepted_tactical,
             unresolved_attacks,
             -accepted_positional,
@@ -161,6 +164,7 @@ def support_selection_key(
             probe.uci,
         )
     return (
+        severe_objection_count(probe),
         -accepted_tactical,
         unresolved_attacks,
         -effective_score(probe, mode),
@@ -181,6 +185,7 @@ def categoriser_selection_key(
     mode = positional_support_mode(graph)
     if mode == "quiet":
         return (
+            severe_objection_count(probe),
             -move_rank,
             -accepted_tactical_support_count(probe, graph),
             unresolved_attack_count(probe, graph),
@@ -189,6 +194,7 @@ def categoriser_selection_key(
             probe.uci,
         )
     return (
+        severe_objection_count(probe),
         -accepted_tactical_support_count(probe, graph),
         unresolved_attack_count(probe, graph),
         -effective_score(probe, mode),
@@ -252,6 +258,14 @@ def positional_reason_count(probe: MoveProbe) -> int:
 
 def material_or_promotion_gain(probe: MoveProbe) -> int:
     return probe.captured_value + probe.promotion_value
+
+
+def severe_objection_count(probe: MoveProbe) -> int:
+    return sum(
+        1
+        for objection in probe.objections
+        if objection.startswith("safety:queen_blunder:")
+    )
 
 
 def is_positional_reason(reason: str) -> bool:

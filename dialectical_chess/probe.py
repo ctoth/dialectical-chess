@@ -229,6 +229,9 @@ def moved_piece_safety_labels(
         elif exchange_gain < 0:
             objections.append(f"safety:moved_piece_en_pris:{moved_value}")
             score += exchange_gain
+            if moved_value >= OWNED_PIECE_VALUE["q"] and exchange_gain <= -300:
+                objections.append(f"safety:queen_blunder:{move.uci()}:{-exchange_gain}")
+                score -= moved_value
         else:
             reasons.append(f"material:exchange_nonnegative:{exchange_gain}")
     return tuple(reasons), tuple(objections), score

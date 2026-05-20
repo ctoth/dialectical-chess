@@ -202,6 +202,31 @@ def test_argument_selector_rejects_early_rook_shuffle() -> None:
     assert decision.move_uci != "a8a7"
 
 
+def test_queen_scale_en_pris_gets_blunder_objection() -> None:
+    board = owned_board_from_fen("r1bqk1nr/p1npppQ1/2p1pb2/1p5p/4P3/1BN5/PPPPNPP1/R1B2RK1 w kq - 1 11")
+    probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
+
+    assert "safety:queen_blunder:g7g8:580" in probes["g7g8"].objections
+    assert probes["g7g8"].score < probes["g7g3"].score
+
+
+def test_argument_selector_rejects_trapped_queen_capture() -> None:
+    board = owned_board_from_fen("r1bqk1nr/p1npppQ1/2p1pb2/1p5p/4P3/1BN5/PPPPNPP1/R1B2RK1 w kq - 1 11")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "g7g8"
+
+
 @pytest.mark.parametrize(
     ("puzzle_id", "fen", "expected_uci"),
     [
