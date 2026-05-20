@@ -199,6 +199,15 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
                 objections.extend(reply_mate_objections)
                 score += reply_mate_score
+        drift_objections, drift_score = unsupported_major_drift_objections(
+            board,
+            move,
+            captured_value=captured_value,
+            gives_check=gives_check,
+            reasons=reasons,
+        )
+        objections.extend(drift_objections)
+        score += drift_score
         reply_attacks = bounded_reply_attacks(
             board,
             move,
@@ -255,6 +264,39 @@ def remove_supported_premature_minor_check(objections: list[str]) -> int:
     if removed:
         objections[:] = kept
     return removed
+
+
+def unsupported_major_drift_objections(
+    board: OwnedBoard,
+    move: Any,
+    *,
+    captured_value: int,
+    gives_check: bool,
+    reasons: list[str],
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() not in {"q", "r"}:
+        return (), 0
+    if board.fullmove_number > 35 or captured_value > 0 or gives_check:
+        return (), 0
+    if any(is_direct_tactical_warrant(reason) for reason in reasons):
+        return (), 0
+    if any(reason.startswith("file_control:") for reason in reasons):
+        return (), 0
+    return ((f"strategy:unsupported_major_drift:{move.uci()}",), -300)
+
+
+def is_direct_tactical_warrant(reason: str) -> bool:
+    return reason.startswith(
+        (
+            "terminal:",
+            "tactical:",
+            "material:",
+            "procedural:",
+            "smt:",
+            "search_support:",
+        )
+    )
 
 
 def fork_witness_labels(witness: Any, gives_check: bool) -> tuple[tuple[str, ...], tuple[str, ...], int]:

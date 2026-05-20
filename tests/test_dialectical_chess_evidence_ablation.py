@@ -1612,6 +1612,36 @@ def test_black_early_queen_excursion_gets_opening_objection() -> None:
     assert probes["d8f6"].score < probes["g8f6"].score
 
 
+def test_unsupported_major_drift_rejects_mined_queen_shuffle() -> None:
+    board = owned_board_from_fen("r4k1r/5pp1/1qppp1np/p7/3PP1QP/P1N2N2/1PP2PP1/R1B1KB1R b KQ - 0 15")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "strategy:unsupported_major_drift:b6b7" in probes["b6b7"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "b6b7"
+
+
 def test_non_mating_queen_check_still_gets_opening_objection() -> None:
     board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/8/p2P4/8/2N5/PPP2PPP/R1BQKBNR b KQkq - 0 5")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

@@ -309,6 +309,8 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
         return 1
     if objection.startswith("king_safety:queen_flank_invasion:"):
         return 2
+    if objection.startswith("strategy:unsupported_major_drift:"):
+        return 1
     if (
         objection.startswith("opening:king_walk:")
         or objection.startswith("opening:king_center_flight:")
