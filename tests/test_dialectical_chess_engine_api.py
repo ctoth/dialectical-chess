@@ -234,6 +234,6 @@ def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
     board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
     settings = EngineSettings(search_depth=2, search_backend="alphabeta")
 
-    adjusted = settings_for_go(settings, board, "go wtime 25000 btime 30000 winc 200 binc 200")
+    adjusted = settings_for_go(settings, board, "go wtime 28000 btime 30000 winc 200 binc 200")
 
     assert adjusted is settings
