@@ -1874,6 +1874,38 @@ def test_unsupported_major_drift_rejects_file_control_queen_shuffle() -> None:
     assert decision.move_uci != "e7e6"
 
 
+def test_immediate_repetition_gets_history_objection() -> None:
+    board = owned_board_from_fen("r1b1k2r/pp2q1pp/2np1p2/5p2/5B1P/1PP2N2/P4PP1/RN1Q1K1R b kq - 2 14")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+            recent_own_move="e6e7",
+        )
+    }
+
+    assert "strategy:immediate_repetition:e7e6:reverses:e6e7" in probes["e7e6"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+            recent_own_move="e6e7",
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "e7e6"
+
+
 def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:
     board = owned_board_from_fen("3k2nr/4b2p/1p1pppp1/pQ6/P3q2P/4B2N/1P3PP1/2R2RK1 b - - 1 25")
     probes = {

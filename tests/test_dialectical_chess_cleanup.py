@@ -22,6 +22,16 @@ def test_uci_position_parses_startpos_moves() -> None:
     assert board.fen() == "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2"
 
 
+def test_uci_position_tracks_recent_own_move() -> None:
+    pytest.importorskip("chess")
+    from dialectical_chess.uci import parse_uci_position_state
+
+    board, recent_own_move = parse_uci_position_state("position startpos moves e2e4 e7e5 g1f3 b8c6")
+
+    assert board.fen() == "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+    assert recent_own_move == "g1f3"
+
+
 def test_epd_parses_best_and_avoid_moves() -> None:
     pytest.importorskip("chess")
     from dialectical_chess.bench import parse_epd_case

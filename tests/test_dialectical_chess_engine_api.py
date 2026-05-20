@@ -48,6 +48,7 @@ def test_engine_settings_are_plain_serializable(
             "max_defense_nodes": 5000,
             "min_defense_material": 300,
         },
+        "recent_own_move": None,
     }
 
 

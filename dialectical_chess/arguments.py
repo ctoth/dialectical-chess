@@ -336,6 +336,8 @@ def severe_objection_weight(objection: str) -> int:
         return 4
     if objection.startswith("strategy:unsupported_major_drift:"):
         return 1
+    if objection.startswith("strategy:immediate_repetition:"):
+        return 2
     if (
         objection.startswith("opening:king_walk:")
         or objection.startswith("opening:king_center_flight:")

@@ -40,6 +40,7 @@ def run_uci(
         reply_analysis=reply_analysis or ReplyAnalysisSettings(),
     )
     board = owned_board_from_fen(START_FEN)
+    recent_own_move: str | None = None
     while True:
         raw = input_stream.readline()
         if raw == "":
@@ -56,13 +57,18 @@ def run_uci(
             _uci_write(output_stream, "readyok")
         elif command == "ucinewgame":
             board = owned_board_from_fen(START_FEN)
+            recent_own_move = None
         elif command.startswith("position "):
             try:
-                board = parse_uci_position(command)
+                board, recent_own_move = parse_uci_position_state(command)
             except ValueError as exc:
                 _uci_write(output_stream, f"info string invalid position: {exc}")
         elif command.startswith("go") or command == "stop":
-            move_settings = settings_for_go(settings, board, command)
+            move_settings = settings_for_go(
+                replace(settings, recent_own_move=recent_own_move),
+                board,
+                command,
+            )
             _uci_write(
                 output_stream,
                 "bestmove " + choose_uci_move(board, settings=move_settings, output_stream=output_stream),
@@ -76,6 +82,10 @@ def run_uci(
 
 
 def parse_uci_position(command: str):
+    return parse_uci_position_state(command)[0]
+
+
+def parse_uci_position_state(command: str):
     tokens = command.split()
     if len(tokens) < 2 or tokens[0] != "position":
         raise ValueError(command)
@@ -96,6 +106,7 @@ def parse_uci_position(command: str):
     else:
         raise ValueError("position must use startpos or fen")
 
+    move_history: list[str] = []
     if index < len(tokens):
         if tokens[index] != "moves":
             raise ValueError(f"unexpected token: {tokens[index]}")
@@ -104,9 +115,11 @@ def parse_uci_position(command: str):
             move = legal_by_uci.get(move_text)
             if move is None:
                 raise ValueError(f"illegal move {move_text}")
+            move_history.append(move_text)
             board = board.apply(move)
             legal_by_uci = {next_move.uci(): next_move for next_move in board.legal_moves()}
-    return board
+    recent_own_move = move_history[-2] if len(move_history) >= 2 else None
+    return board, recent_own_move
 
 
 def choose_uci_move(

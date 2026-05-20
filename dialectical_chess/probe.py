@@ -37,6 +37,7 @@ class ProbeSettings:
     smt: SmtSettings = field(default_factory=SmtSettings)
     positional_reasons: bool = True
     reply_mate_scan: bool = True
+    recent_own_move: str | None = None
 
 
 def probe_moves(
@@ -50,6 +51,7 @@ def probe_moves(
     positional_reasons: bool = True,
     reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
+    recent_own_move: str | None = None,
 ) -> list[MoveProbe]:
     settings = ProbeSettings(
         dialectic_depth=dialectic_depth,
@@ -58,6 +60,7 @@ def probe_moves(
         smt=SmtSettings(mate_in_one=smt_mate, fork=smt_fork),
         positional_reasons=positional_reasons,
         reply_mate_scan=reply_mate_scan,
+        recent_own_move=recent_own_move,
     )
     return probe_moves_with_settings(board, settings)
 
@@ -217,6 +220,16 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         )
         objections.extend(drift_objections)
         score += drift_score
+        repetition_objections, repetition_score = immediate_repetition_objections(
+            move,
+            recent_own_move=settings.recent_own_move,
+            captured_value=captured_value,
+            gives_check=gives_check,
+            promotion_value=promotion_value,
+            reasons=reasons,
+        )
+        objections.extend(repetition_objections)
+        score += repetition_score
         reply_attacks = bounded_reply_attacks(
             board,
             move,
@@ -279,6 +292,27 @@ def unsupported_major_drift_objections(
     if any(is_direct_tactical_warrant(reason) for reason in reasons):
         return (), 0
     return ((f"strategy:unsupported_major_drift:{move.uci()}",), -300)
+
+
+def immediate_repetition_objections(
+    move: Any,
+    *,
+    recent_own_move: str | None,
+    captured_value: int,
+    gives_check: bool,
+    promotion_value: int,
+    reasons: list[str],
+) -> tuple[tuple[str, ...], int]:
+    if recent_own_move is None or len(recent_own_move) < 4:
+        return (), 0
+    if captured_value > 0 or promotion_value > 0 or gives_check:
+        return (), 0
+    if any(is_direct_tactical_warrant(reason) for reason in reasons):
+        return (), 0
+    move_text = move.uci()
+    if move_text[:2] != recent_own_move[2:4] or move_text[2:4] != recent_own_move[:2]:
+        return (), 0
+    return ((f"strategy:immediate_repetition:{move_text}:reverses:{recent_own_move}",), -1_000)
 
 
 def is_direct_tactical_warrant(reason: str) -> bool:
