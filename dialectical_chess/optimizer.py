@@ -1,10 +1,15 @@
 """Chess adapter for generic argumentation optimization semantics."""
 
 from __future__ import annotations
-
-import sys
 from dataclasses import replace
-from pathlib import Path
+
+from argumentation.dung import ArgumentationFramework
+from argumentation.optimization import (
+    OptimizationFeature,
+    OptimizationObjective,
+    OptimizationPolicy,
+    optimize_framework,
+)
 
 from dialectical_chess.arguments import (
     MoveProbe,
@@ -33,15 +38,6 @@ def choose_optimized_move(
     only maps chess evidence into objective features.
     """
 
-    optimization = _import_argumentation_optimization()
-    if isinstance(optimization, str):
-        selected = sorted(grounded_candidates(probes, graph), key=lambda probe: selection_key(probe, graph))[0]
-        return replace(
-            selected,
-            optimizer_trace={"status": "unavailable", "fallback": "argument", "reason": optimization},
-        )
-
-    ArgumentationFramework, OptimizationFeature, OptimizationObjective, OptimizationPolicy, optimize_framework = optimization
     framework = ArgumentationFramework(
         arguments=graph.arguments,
         defeats=graph.defeats,
@@ -120,28 +116,4 @@ def _optimizer_features(
         feature_type(move_arg, "positional_support_raw", positional_support_raw),
         feature_type(move_arg, "positional_support_effective", positional_support_effective),
         feature_type(move_arg, "base_score_effective", effective_score(probe, position_mode)),
-    )
-
-
-def _import_argumentation_optimization():
-    root = Path(__file__).resolve().parents[2]
-    src = root / "src"
-    if str(src) not in sys.path:
-        sys.path.insert(0, str(src))
-    try:
-        from argumentation.dung import ArgumentationFramework
-        from argumentation.optimization import (
-            OptimizationFeature,
-            OptimizationObjective,
-            OptimizationPolicy,
-            optimize_framework,
-        )
-    except ImportError as exc:
-        return str(exc)
-    return (
-        ArgumentationFramework,
-        OptimizationFeature,
-        OptimizationObjective,
-        OptimizationPolicy,
-        optimize_framework,
     )
