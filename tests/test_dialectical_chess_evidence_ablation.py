@@ -621,6 +621,66 @@ def test_low_search_depth_checks_reply_mate_for_major_piece_threats() -> None:
     assert decision.move_uci != "a5c5"
 
 
+def test_low_search_depth_checks_forced_reply_mate_for_king_moves() -> None:
+    board = owned_board_from_fen("2q2rk1/1r1pb1pp/p3pn2/Q2N4/bn2P3/3P4/PP3PPP/2KR3R w - - 4 22")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_3:c1d2" in probes["c1d2"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "c1d2"
+
+
+def test_low_search_depth_checks_forced_reply_mate_for_en_pris_threats() -> None:
+    board = owned_board_from_fen("r4kn1/2pQ1ppB/3p4/p6b/3n1P2/B1P5/P1P2KPP/R3R3 b - - 0 20")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_3:d4c2" in probes["d4c2"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "d4c2"
+
+
 def test_uncastled_flank_pawn_push_gets_king_safety_objection() -> None:
     board = owned_board_from_fen("r3k1nr/5ppp/p7/2b2q2/PnP2P2/1Q1p4/1P1P2PP/R1B1K1NR w KQkq - 2 14")
     probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}

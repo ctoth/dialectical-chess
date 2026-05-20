@@ -271,7 +271,9 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
         return 3
     if is_large_search_refutation(objection):
         return 1
-    if objection.startswith("tactical:allows_reply_mate_in_one:"):
+    if objection.startswith("tactical:allows_reply_mate_in_one:") or objection.startswith(
+        "tactical:allows_reply_forced_mate_in_"
+    ):
         return 3
     if objection.startswith("safety:queen_blunder:"):
         return 2

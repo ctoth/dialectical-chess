@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from functools import lru_cache
 
 import chess
 import chess.pgn
@@ -82,6 +83,12 @@ def has_forced_mate(board: chess.Board, *, mate_depth: int) -> bool:
     """Return whether the side to move can force mate within mate_depth moves."""
     if mate_depth < 1:
         raise ValueError("mate_depth must be at least 1")
+    return _has_forced_mate_fen(board.fen(), mate_depth)
+
+
+@lru_cache(maxsize=100_000)
+def _has_forced_mate_fen(fen: str, mate_depth: int) -> bool:
+    board = chess.Board(fen)
     if board.is_checkmate():
         return True
 
@@ -96,7 +103,7 @@ def has_forced_mate(board: chess.Board, *, mate_depth: int) -> bool:
         if not defender_replies:
             continue
         if all(
-            has_forced_mate(defender_child(attacker_child, reply), mate_depth=mate_depth - 1)
+            _has_forced_mate_fen(defender_child(attacker_child, reply).fen(), mate_depth - 1)
             for reply in defender_replies
         ):
             return True

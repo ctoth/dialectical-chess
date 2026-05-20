@@ -5,8 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import chess
+
 from dialectical_chess.arguments import MoveProbe
 from dialectical_chess.board import OwnedBoard, file_of, opposite, piece_color, rank_of, square_index, square_name
+from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.search import (
     OWNED_PIECE_VALUE,
     ReplyAnalysisCache,
@@ -153,6 +156,20 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
                 objections.extend(reply_mate_objections)
                 score += reply_mate_score
+            if should_scan_reply_forced_mate(
+                settings.search.depth,
+                board,
+                move,
+                reasons=reasons,
+                objections=objections,
+            ):
+                forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
+                    child,
+                    move,
+                    mate_depth=3,
+                )
+                objections.extend(forced_mate_objections)
+                score += forced_mate_score
         if settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
@@ -545,6 +562,17 @@ def reply_mate_in_one_objections(
     return labels, -100_000
 
 
+def reply_forced_mate_objections(
+    child: OwnedBoard,
+    move: Any,
+    *,
+    mate_depth: int,
+) -> tuple[tuple[str, ...], int]:
+    if not has_forced_mate(chess.Board(child.fen()), mate_depth=mate_depth):
+        return (), 0
+    return (f"tactical:allows_reply_forced_mate_in_{mate_depth}:{move.uci()}",), -100_000
+
+
 def should_scan_reply_mate(
     search_depth: int,
     board: OwnedBoard,
@@ -573,6 +601,35 @@ def should_scan_reply_mate(
         or objection.startswith("opening:king_walk:")
         or objection.startswith("opening:king_center_flight:")
         or objection.startswith("opening:minor_retreat:")
+        for objection in objections
+    )
+
+
+def should_scan_reply_forced_mate(
+    search_depth: int,
+    board: OwnedBoard,
+    move: Any,
+    *,
+    reasons: list[str],
+    objections: list[str],
+) -> bool:
+    if search_depth > 2:
+        return False
+    piece = board.piece_at(move.from_square)
+    if piece is None:
+        return False
+    if piece.lower() == "k":
+        return True
+    has_threat_reason = any(
+        reason.startswith("tactical:threat:")
+        for reason in reasons
+    )
+    if not has_threat_reason:
+        return False
+    if piece.lower() in {"q", "r"}:
+        return True
+    return any(
+        objection.startswith("safety:moved_piece_en_pris:")
         for objection in objections
     )
 
