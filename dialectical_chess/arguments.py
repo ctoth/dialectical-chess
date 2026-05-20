@@ -275,8 +275,22 @@ def soft_positional_reason_count(probe: MoveProbe) -> int:
     return sum(
         1
         for reason in probe.reasons
-        if is_positional_reason(reason) and not reason.startswith("piece_safety:")
+        if is_positional_reason(reason) and not is_concrete_non_queen_piece_safety(reason)
     )
+
+
+def is_concrete_non_queen_piece_safety(reason: str) -> bool:
+    prefix = "piece_safety:defended:"
+    if not reason.startswith(prefix):
+        return False
+    parts = reason.split(":")
+    if len(parts) != 4:
+        return False
+    try:
+        moved_value = int(parts[3])
+    except ValueError:
+        return False
+    return moved_value < 900
 
 
 def material_or_promotion_gain(probe: MoveProbe) -> int:
