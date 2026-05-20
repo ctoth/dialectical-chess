@@ -65,6 +65,26 @@ def test_uci_loop_keeps_recent_own_move_across_fen_only_updates(monkeypatch) -> 
     assert output_stream.getvalue().splitlines() == ["bestmove a5c6", "bestmove c6a5"]
 
 
+def test_low_clock_keeps_dialectical_evidence_enabled() -> None:
+    pytest.importorskip("chess")
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("2b1kbnr/1p1p1ppp/4p3/4P3/2q5/6P1/1r1K3P/R2Q3R w k - 7 27")
+    settings = settings_for_go(
+        EngineSettings(search_depth=1, smt_mate=True, smt_fork=True, positional_reasons=True, reply_mate_scan=True),
+        board,
+        "go wtime 1000 btime 1000",
+    )
+
+    assert settings.search_depth == 0
+    assert settings.smt_mate is True
+    assert settings.smt_fork is True
+    assert settings.positional_reasons is True
+    assert settings.reply_mate_scan is True
+
+
 def test_epd_parses_best_and_avoid_moves() -> None:
     pytest.importorskip("chess")
     from dialectical_chess.bench import parse_epd_case
