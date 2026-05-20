@@ -1484,6 +1484,36 @@ def test_argument_selector_answers_advanced_flank_pawn() -> None:
     assert decision.move_uci in {"g7h6", "g7g6"}
 
 
+def test_argument_selector_rejects_castling_into_advanced_flank_pawn() -> None:
+    board = owned_board_from_fen("r1bqk2r/ppp1n1pp/2n1p3/3pNp1P/3P1B2/P1N3P1/1PP2P2/R2QKB1R b KQkq - 1 11")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+        )
+    }
+
+    assert "king_safety:castle_into_advanced_flank_pawn:e8g8:h5" in probes["e8g8"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "e8g8"
+
+
 def test_queen_flank_invasion_gets_king_safety_objection() -> None:
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
