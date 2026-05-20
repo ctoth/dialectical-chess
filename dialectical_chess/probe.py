@@ -268,15 +268,23 @@ def opening_development_objections(
     gives_check: bool,
 ) -> tuple[tuple[str, ...], int]:
     piece = board.piece_at(move.from_square)
-    if piece is None or piece.lower() != "q":
+    if piece is None:
         return (), 0
     color = piece_color(piece)
-    if board.fullmove_number > 10:
+    kind = piece.lower()
+    if kind not in {"q", "r"} or board.fullmove_number > 10:
         return (), 0
     undeveloped_minors = undeveloped_minor_count(board, color)
     if undeveloped_minors < 2:
         return (), 0
     if captured_value >= OWNED_PIECE_VALUE["n"] or gives_check:
+        return (), 0
+    if kind == "r" and captured_value == 0:
+        return (
+            (f"opening:premature_rook:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
+            -250,
+        )
+    if kind != "q":
         return (), 0
     return (
         (f"opening:premature_queen:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
@@ -305,7 +313,7 @@ def opening_king_safety_objections(
     piece = board.piece_at(move.from_square)
     if piece is None or piece.lower() != "k":
         return (), 0
-    if move.kind == "castle" or board.fullmove_number > 12:
+    if move.kind == "castle" or board.fullmove_number > 20:
         return (), 0
     color = piece_color(piece)
     if board.in_check(color):

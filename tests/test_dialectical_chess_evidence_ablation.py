@@ -177,6 +177,31 @@ def test_argument_selector_rejects_opening_king_walk() -> None:
     assert decision.move_uci == "b5c6"
 
 
+def test_early_rook_shuffle_gets_opening_objection() -> None:
+    board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/2n1p3/p7/3PP3/2PB4/PP3PPP/RNBQK1NR b KQkq - 1 4")
+    probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
+
+    assert "opening:premature_rook:a8a7:undeveloped_minors:3" in probes["a8a7"].objections
+    assert probes["a8a7"].score < probes["g8f6"].score
+
+
+def test_argument_selector_rejects_early_rook_shuffle() -> None:
+    board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/2n1p3/p7/3PP3/2PB4/PP3PPP/RNBQK1NR b KQkq - 1 4")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "a8a7"
+
+
 @pytest.mark.parametrize(
     ("puzzle_id", "fen", "expected_uci"),
     [
