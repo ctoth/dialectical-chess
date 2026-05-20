@@ -2271,6 +2271,50 @@ def test_low_clock_low_mobility_pawn_push_gets_forced_mate_depth_three_objection
     }
 
 
+def test_low_clock_positive_rook_move_gets_forced_mate_depth_three_objection() -> None:
+    board = owned_board_from_fen("3q1r1k/r1p4p/1pB1Q1pP/p7/3P1p2/P1N4N/1PP2BP1/2K1R2R b - - 2 24")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=2,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+            positional_reasons=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_3:f8f6" in probes["f8f6"].objections
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            dialectic_depth=2,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+            positional_reasons=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci in {
+        "f8f5",
+        "d8d6",
+        "d8g5",
+        "d8d5",
+        "d8h4",
+        "a7a8",
+        "a7b7",
+        "a7a6",
+        "g6g5",
+        "b6b5",
+        "a5a4",
+        "f4f3",
+    }
+
+
 def test_checking_knight_fork_gets_en_pris_objection_when_queen_can_capture() -> None:
     board = owned_board_from_fen("r1bqk2r/ppppn1pp/3bpp2/8/1nBPP3/P1N2N2/1PP1QPPP/R1B1K2R b KQkq - 0 7")
 
