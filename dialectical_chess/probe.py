@@ -877,6 +877,8 @@ def forced_reply_mate_depths(
         return (2, 3)
     if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
         return (2, 3)
+    if search_depth == 1 and has_search_refutation_at_most(list(probe.objections), -700):
+        return (2, 3)
     if search_depth in {0, 1}:
         return (2,)
     return (2, 3)
@@ -965,6 +967,8 @@ def should_scan_reply_forced_mate(
             and board.in_check(board.turn)
             and has_search_refutation_at_most(objections, -700)
         ):
+            return True
+        if has_search_refutation_at_most(objections, -700):
             return True
         has_threat_reason = any(
             reason.startswith("tactical:threat:")

@@ -2192,3 +2192,34 @@ def test_core_experiment_matrix_includes_no_fork_rows() -> None:
         "argument_d2_search1_no_fork",
         "optimizer_d2_no_fork",
     } <= names
+
+
+def test_medium_refuted_pawn_capture_gets_forced_mate_depth_three_objection() -> None:
+    board = owned_board_from_fen("4r3/2pk4/5p2/pp4p1/1nPP4/1PK1BP2/P5q1/2R5 w - - 0 39")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+            positional_reasons=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_3:c4b5" in probes["c4b5"].objections
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+            positional_reasons=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci in {"d4d5", "e3d2"}
