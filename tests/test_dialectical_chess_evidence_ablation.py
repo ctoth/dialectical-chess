@@ -507,6 +507,66 @@ def test_reply_mate_in_one_objection_works_without_search_depth() -> None:
     assert probes["c2c4"].score < probes["f2f3"].score
 
 
+def test_depth_zero_checks_forced_reply_mate_for_top_candidates() -> None:
+    board = owned_board_from_fen("3rk2r/Q1p1bppp/p7/5b2/P7/1n1nKN2/1P1P2PP/7q w k - 0 23")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_2:g2g3" in probes["g2g3"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "g2g3"
+
+
+def test_depth_zero_checks_forced_reply_mate_for_top_king_moves() -> None:
+    board = owned_board_from_fen("Q4k2/2q3pp/1p6/p4p2/P7/1PP2N2/5PPP/R3R1K1 b - - 0 31")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    }
+
+    assert "tactical:allows_reply_forced_mate_in_2:f8f7" in probes["f8f7"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "f8f7"
+
+
 def test_argument_selector_rejects_reply_mate_without_search_depth() -> None:
     board = owned_board_from_fen("6nr/n4pp1/k6p/8/3p4/1P6/1PPP1PPP/r1B3K1 w - - 0 22")
 

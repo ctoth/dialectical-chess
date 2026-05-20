@@ -592,9 +592,14 @@ def scan_forced_reply_mates_for_candidate_moves(
     *,
     search_depth: int,
 ) -> list[MoveProbe]:
-    if search_depth not in {1, 2}:
+    if search_depth not in {0, 1, 2}:
         return probes
-    candidate_limit = 6 if search_depth == 1 else 12
+    if search_depth == 0:
+        candidate_limit = 12
+    elif search_depth == 1:
+        candidate_limit = 6
+    else:
+        candidate_limit = 12
     move_by_uci = {move.uci(): move for move in legal_moves}
     legal_move_count = len(legal_moves)
     scan_depth_one_mate_three = (
@@ -780,11 +785,13 @@ def should_scan_reply_forced_mate(
     objections: list[str],
     legal_move_count: int | None = None,
 ) -> bool:
-    if search_depth not in {1, 2}:
+    if search_depth not in {0, 1, 2}:
         return False
     piece = board.piece_at(move.from_square)
     if piece is None:
         return False
+    if search_depth == 0:
+        return True
     if search_depth == 1:
         if piece.lower() == "k":
             return True
