@@ -316,6 +316,8 @@ def severe_objection_weight(objection: str) -> int:
         return 6
     if is_large_search_refutation(objection):
         return 1
+    if objection.startswith("smt:fork:high_value_piece:"):
+        return 3
     if objection.startswith("tactical:allows_reply_mate_in_one:") or objection.startswith(
         "tactical:allows_reply_forced_mate_in_2:"
     ):
@@ -418,21 +420,75 @@ def _accepted_reason_count(
 
 
 def extra_support_copies(evidence: ArgumentEvidence) -> int:
-    if evidence.world in {EvidenceWorld.TERMINAL, EvidenceWorld.PROCEDURAL}:
+    if evidence.label.startswith("material:promotion:"):
+        return 16
+    if evidence.label.startswith("material:capture:"):
+        return material_support_copies(evidence.label)
+    if evidence.label.startswith("piece_safety:defended:"):
+        return defended_piece_support_copies(evidence.label)
+    if evidence.label == "tactical:check":
+        return 6
+    if evidence.tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD:
         return 5
-    if evidence.world in {EvidenceWorld.MATERIAL, EvidenceWorld.SMT, EvidenceWorld.SEARCH}:
+    if evidence.world in {EvidenceWorld.TERMINAL, EvidenceWorld.PROCEDURAL}:
+        return 8
+    if evidence.world in {EvidenceWorld.SMT, EvidenceWorld.SEARCH}:
         return 3
     if evidence.world == EvidenceWorld.TACTICAL:
         return 2
     return 0
 
 
-def extra_defeater_copies(defeater: str) -> int:
-    if defeater in {"compensating_forcing_pressure", "forcing_material_gain"}:
-        return 4
-    if defeater == "compensating_tactical_pressure":
+def material_support_copies(label: str) -> int:
+    parts = label.split(":")
+    if len(parts) != 3:
+        return 3
+    try:
+        value = int(parts[2])
+    except ValueError:
+        return 3
+    if value >= 500:
+        return 8
+    if value >= 300:
+        return 5
+    if value > 0:
         return 2
+    return 0
+
+
+def defended_piece_support_copies(label: str) -> int:
+    parts = label.split(":")
+    if len(parts) != 4:
+        return 0
+    try:
+        value = int(parts[3])
+    except ValueError:
+        return 0
+    if value >= 900:
+        return 3
+    if value >= 500:
+        return 2
+    return 0
+
+
+def extra_defeater_copies(defeater: str) -> int:
+    if defeater == "search_support":
+        return 96
+    if defeater in {"compensating_forcing_pressure", "forcing_material_gain"}:
+        return 32
+    if defeater == "compensating_tactical_pressure":
+        return 16
     return 1
+
+
+def extra_objection_copies(objection: str) -> int:
+    return max(severe_objection_weight(objection) - 1, 0)
+
+
+def extra_defense_copies(reply_attack: str) -> int:
+    if ":defended:" in reply_attack:
+        return 12
+    return 0
 
 
 def accepted_defense_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
@@ -468,28 +524,37 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
             arguments.add(reason_arg)
             reason_evidence = to_argument_evidence(reason)
             evidence[reason_arg] = reason_evidence
-            defeats.add((reason_arg, doubt_arg))
-            for index in range(extra_support_copies(reason_evidence)):
-                support_arg = f"support:{probe.uci}:{reason}:{index}"
-                arguments.add(support_arg)
-                defeats.add((support_arg, doubt_arg))
+            if reason_evidence.supports_argument:
+                defeats.add((reason_arg, doubt_arg))
+                for index in range(extra_support_copies(reason_evidence)):
+                    support_arg = f"support:{probe.uci}:{reason}:{index}"
+                    arguments.add(support_arg)
+                    defeats.add((support_arg, doubt_arg))
             if reason == "terminal:checkmate":
                 for other in probes:
                     if other.uci != probe.uci:
                         defeats.add((reason_arg, move_args[other.uci]))
         for objection in probe.objections:
             objection_arg = f"{objection}:{probe.uci}"
+            objection_args = [objection_arg]
             arguments.add(objection_arg)
             if severe_objection_weight(objection) > 0:
                 defeats.add((objection_arg, move_arg))
+                for index in range(extra_objection_copies(objection)):
+                    weighted_objection_arg = f"objection:{probe.uci}:{objection}:{index}"
+                    objection_args.append(weighted_objection_arg)
+                    arguments.add(weighted_objection_arg)
+                    defeats.add((weighted_objection_arg, move_arg))
             for defeater in objection_defeaters(probe, objection):
                 defeater_arg = f"defeater:{probe.uci}:{defeater}"
                 arguments.add(defeater_arg)
-                defeats.add((defeater_arg, objection_arg))
+                for target_arg in objection_args:
+                    defeats.add((defeater_arg, target_arg))
                 for index in range(extra_defeater_copies(defeater)):
                     support_arg = f"defeater:{probe.uci}:{defeater}:{index}"
                     arguments.add(support_arg)
-                    defeats.add((support_arg, objection_arg))
+                    for target_arg in objection_args:
+                        defeats.add((support_arg, target_arg))
         for reply_attack in probe.reply_attacks:
             reply_arg = f"reply_attack:{probe.uci}:{reply_attack}"
             arguments.add(reply_arg)
@@ -498,6 +563,10 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
                 defense_arg = f"defense:{probe.uci}:{reply_attack}"
                 arguments.add(defense_arg)
                 defeats.add((defense_arg, reply_arg))
+                for index in range(extra_defense_copies(reply_attack)):
+                    defense_support_arg = f"defense:{probe.uci}:{reply_attack}:{index}"
+                    arguments.add(defense_support_arg)
+                    defeats.add((defense_support_arg, reply_arg))
 
     frozen_arguments = frozenset(arguments)
     frozen_defeats = frozenset(defeats)
