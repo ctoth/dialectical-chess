@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-import sys
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
 from typing import Any
 
+from argumentation.dung import ArgumentationFramework, grounded_extension
+from argumentation.ranking import categoriser_scores
+
 from dialectical_chess.evidence import (
-    is_argument_positional_reason as is_positional_reason,
+    ArgumentEvidence,
+    EvidenceWorld,
+    search_refutation_score,
+    to_argument_evidence,
 )
-from dialectical_chess.evidence import is_tactical_reason, tactical_threat_value
 
 SELECTOR_MODES = frozenset({"argument", "score", "grounded", "support", "categoriser", "optimizer"})
 POSITIONAL_SCORE_BONUS = 25
@@ -44,6 +47,7 @@ class RootArgumentGraph:
     move_arguments: dict[str, str]
     grounded_extension: frozenset[str]
     ranking: dict[str, Any]
+    evidence: dict[str, ArgumentEvidence] = field(default_factory=dict)
 
 
 def choose_move(
@@ -64,14 +68,14 @@ def choose_move(
     if selector_mode == "support":
         return sorted(probes, key=lambda probe: support_selection_key(probe, graph))[0]
     if selector_mode == "categoriser":
-        return sorted(probes, key=lambda probe: categoriser_selection_key(probe, graph))[0]
+        return sorted(probes, key=lambda probe: categoriser_decision_key(probe, graph))[0]
     if selector_mode == "optimizer":
         from dialectical_chess.optimizer import choose_optimized_move
 
         return choose_optimized_move(probes, graph)
     return sorted(
-        argument_selection_candidates(probes, graph),
-        key=lambda probe: selection_key(probe, graph),
+        probes,
+        key=lambda probe: categoriser_decision_key(probe, graph),
     )[0]
 
 
@@ -95,12 +99,22 @@ def score_selection_key(probe: MoveProbe) -> tuple[int, str]:
     return (-probe.score, probe.uci)
 
 
+def categoriser_decision_key(
+    probe: MoveProbe,
+    graph: RootArgumentGraph,
+) -> tuple[Any, ...]:
+    move_arg = graph.move_arguments[probe.uci]
+    ranking_scores = graph.ranking["scores"]
+    move_rank = float(ranking_scores.get(move_arg, 0.0))
+    return (-move_rank, -probe.score, probe.uci)
+
+
 def selection_key(
     probe: MoveProbe,
     graph: RootArgumentGraph,
 ) -> tuple[Any, ...]:
     move_arg = graph.move_arguments[probe.uci]
-    ranking_scores = graph.ranking.get("scores", {}) if graph.ranking.get("available") else {}
+    ranking_scores = graph.ranking["scores"]
     move_rank = float(ranking_scores.get(move_arg, 0.0))
     mode = positional_support_mode(graph)
     accepted_tactical = accepted_tactical_support_count(probe, graph)
@@ -181,7 +195,7 @@ def categoriser_selection_key(
     graph: RootArgumentGraph,
 ) -> tuple[Any, ...]:
     move_arg = graph.move_arguments[probe.uci]
-    ranking_scores = graph.ranking.get("scores", {}) if graph.ranking.get("available") else {}
+    ranking_scores = graph.ranking["scores"]
     move_rank = float(ranking_scores.get(move_arg, 0.0))
     mode = positional_support_mode(graph)
     if mode == "quiet":
@@ -215,11 +229,11 @@ def accepted_support_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
 
 
 def accepted_tactical_support_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
-    return _accepted_reason_count(probe, graph, is_tactical_reason)
+    return _accepted_reason_count(probe, graph, lambda evidence: evidence.counts_as_tactical)
 
 
 def accepted_positional_support_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
-    return _accepted_reason_count(probe, graph, is_positional_reason)
+    return _accepted_reason_count(probe, graph, lambda evidence: evidence.counts_as_positional)
 
 
 def effective_positional_support_count(
@@ -239,7 +253,7 @@ def positional_support_mode(graph: RootArgumentGraph, *, include_positional: boo
         return "disabled"
     if any(
         argument.startswith("reason:")
-        and is_tactical_reason(argument.split(":", 2)[2])
+        and graph.evidence[argument].counts_as_tactical
         and argument in graph.grounded_extension
         for argument in graph.arguments
     ):
@@ -254,14 +268,15 @@ def effective_score(probe: MoveProbe, mode: str) -> int:
 
 
 def positional_reason_count(probe: MoveProbe) -> int:
-    return sum(1 for reason in probe.reasons if is_positional_reason(reason))
+    return sum(1 for reason in probe.reasons if to_argument_evidence(reason).counts_as_positional)
 
 
 def soft_positional_reason_count(probe: MoveProbe) -> int:
     return sum(
         1
         for reason in probe.reasons
-        if is_positional_reason(reason) and not is_concrete_non_queen_piece_safety(reason)
+        if to_argument_evidence(reason).counts_as_positional
+        and not is_concrete_non_queen_piece_safety(reason)
     )
 
 
@@ -284,7 +299,7 @@ def material_or_promotion_gain(probe: MoveProbe) -> int:
 
 
 def severe_objection_count(probe: MoveProbe) -> int:
-    return sum(severe_objection_weight(objection, probe) for objection in probe.objections)
+    return sum(severe_objection_weight(objection) for objection in probe.objections)
 
 
 def has_forced_mate_refutation(probe: MoveProbe) -> bool:
@@ -296,7 +311,7 @@ def has_forced_mate_refutation(probe: MoveProbe) -> bool:
     )
 
 
-def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> int:
+def severe_objection_weight(objection: str) -> int:
     if is_forced_mate_refutation(objection):
         return 6
     if is_large_search_refutation(objection):
@@ -308,17 +323,10 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
     if objection.startswith("tactical:allows_reply_forced_mate_in_"):
         return 3
     if objection.startswith("safety:queen_blunder:"):
-        if probe is not None and has_compensating_forcing_pressure(probe):
-            return 0
         return 2
     if objection.startswith("safety:ignored_hanging_piece:"):
         return 1
     if is_moved_minor_or_major_en_pris(objection):
-        if probe is not None and (
-            has_compensating_tactical_pressure(probe)
-            or has_forcing_material_gain(probe)
-        ):
-            return 0
         return 1
     if objection.startswith("king_safety:queen_flank_invasion:"):
         return 2
@@ -336,8 +344,6 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
     ):
         return 1
     if objection.startswith("opening:premature_minor_check:"):
-        if probe is not None and has_search_support(probe):
-            return 0
         return 1
     return 0
 
@@ -352,19 +358,6 @@ def is_large_search_refutation(objection: str) -> bool:
     return score is not None and score <= LARGE_SEARCH_REFUTATION_THRESHOLD
 
 
-def search_refutation_score(objection: str) -> int | None:
-    prefix = "search_refutes:"
-    if not objection.startswith(prefix):
-        return None
-    parts = objection.split(":")
-    if len(parts) != 3:
-        return None
-    try:
-        return int(parts[2])
-    except ValueError:
-        return None
-
-
 def is_moved_minor_or_major_en_pris(objection: str) -> bool:
     prefix = "safety:moved_piece_en_pris:"
     if not objection.startswith(prefix):
@@ -377,7 +370,10 @@ def is_moved_minor_or_major_en_pris(objection: str) -> bool:
 
 
 def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
-    return any(tactical_threat_value(reason) >= COMPENSATING_TACTICAL_THREAT_THRESHOLD for reason in probe.reasons)
+    return any(
+        to_argument_evidence(reason).tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD
+        for reason in probe.reasons
+    )
 
 
 def has_compensating_forcing_pressure(probe: MoveProbe) -> bool:
@@ -394,6 +390,20 @@ def has_search_support(probe: MoveProbe) -> bool:
     return any(reason.startswith("search_support:") for reason in probe.reasons)
 
 
+def objection_defeaters(probe: MoveProbe, objection: str) -> tuple[str, ...]:
+    defeaters = []
+    if objection.startswith("safety:queen_blunder:") and has_compensating_forcing_pressure(probe):
+        defeaters.append("compensating_forcing_pressure")
+    if is_moved_minor_or_major_en_pris(objection):
+        if has_compensating_tactical_pressure(probe):
+            defeaters.append("compensating_tactical_pressure")
+        if has_forcing_material_gain(probe):
+            defeaters.append("forcing_material_gain")
+    if objection.startswith("opening:premature_minor_check:") and has_search_support(probe):
+        defeaters.append("search_support")
+    return tuple(defeaters)
+
+
 def _accepted_reason_count(
     probe: MoveProbe,
     graph: RootArgumentGraph,
@@ -402,9 +412,27 @@ def _accepted_reason_count(
     return sum(
         1
         for reason in probe.reasons
-        if predicate(reason)
+        if predicate(graph.evidence[f"reason:{probe.uci}:{reason}"])
         and f"reason:{probe.uci}:{reason}" in graph.grounded_extension
     )
+
+
+def extra_support_copies(evidence: ArgumentEvidence) -> int:
+    if evidence.world in {EvidenceWorld.TERMINAL, EvidenceWorld.PROCEDURAL}:
+        return 5
+    if evidence.world in {EvidenceWorld.MATERIAL, EvidenceWorld.SMT, EvidenceWorld.SEARCH}:
+        return 3
+    if evidence.world == EvidenceWorld.TACTICAL:
+        return 2
+    return 0
+
+
+def extra_defeater_copies(defeater: str) -> int:
+    if defeater in {"compensating_forcing_pressure", "forcing_material_gain"}:
+        return 4
+    if defeater == "compensating_tactical_pressure":
+        return 2
+    return 1
 
 
 def accepted_defense_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
@@ -426,14 +454,25 @@ def unresolved_attack_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
 def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
     arguments: set[str] = set()
     defeats: set[tuple[str, str]] = set()
+    evidence: dict[str, ArgumentEvidence] = {}
     move_args = {probe.uci: f"move:{probe.uci}" for probe in probes}
 
     for probe in probes:
         move_arg = move_args[probe.uci]
+        doubt_arg = f"doubt:{probe.uci}"
         arguments.add(move_arg)
+        arguments.add(doubt_arg)
+        defeats.add((doubt_arg, move_arg))
         for reason in probe.reasons:
             reason_arg = f"reason:{probe.uci}:{reason}"
             arguments.add(reason_arg)
+            reason_evidence = to_argument_evidence(reason)
+            evidence[reason_arg] = reason_evidence
+            defeats.add((reason_arg, doubt_arg))
+            for index in range(extra_support_copies(reason_evidence)):
+                support_arg = f"support:{probe.uci}:{reason}:{index}"
+                arguments.add(support_arg)
+                defeats.add((support_arg, doubt_arg))
             if reason == "terminal:checkmate":
                 for other in probes:
                     if other.uci != probe.uci:
@@ -441,7 +480,16 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
         for objection in probe.objections:
             objection_arg = f"{objection}:{probe.uci}"
             arguments.add(objection_arg)
-            defeats.add((objection_arg, move_arg))
+            if severe_objection_weight(objection) > 0:
+                defeats.add((objection_arg, move_arg))
+            for defeater in objection_defeaters(probe, objection):
+                defeater_arg = f"defeater:{probe.uci}:{defeater}"
+                arguments.add(defeater_arg)
+                defeats.add((defeater_arg, objection_arg))
+                for index in range(extra_defeater_copies(defeater)):
+                    support_arg = f"defeater:{probe.uci}:{defeater}:{index}"
+                    arguments.add(support_arg)
+                    defeats.add((support_arg, objection_arg))
         for reply_attack in probe.reply_attacks:
             reply_arg = f"reply_attack:{probe.uci}:{reply_attack}"
             arguments.add(reply_arg)
@@ -461,6 +509,7 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
         move_arguments=move_args,
         grounded_extension=grounded_extension,
         ranking=ranking,
+        evidence=evidence,
     )
 
 
@@ -483,16 +532,13 @@ def local_argumentation_ranking(
     arguments: frozenset[str],
     defeats: frozenset[tuple[str, str]],
 ) -> dict[str, Any]:
-    imported = import_local_argumentation()
-    if isinstance(imported, str):
-        return {"available": False, "reason": imported}
-    ArgumentationFramework, _grounded_extension, categoriser_scores = imported
     framework = ArgumentationFramework(arguments=arguments, defeats=defeats)
     result = categoriser_scores(framework)
     return {
-        "available": True,
         "scores": dict(sorted(result.scores.items())),
         "ranking": [sorted(tier) for tier in result.ranking],
+        "converged": result.converged,
+        "iterations": result.iterations,
         "semantics": result.semantics,
     }
 
@@ -501,22 +547,5 @@ def local_grounded_extension(
     arguments: frozenset[str],
     defeats: frozenset[tuple[str, str]],
 ) -> frozenset[str]:
-    imported = import_local_argumentation()
-    if isinstance(imported, str):
-        return frozenset()
-    ArgumentationFramework, grounded_extension, _categoriser_scores = imported
     framework = ArgumentationFramework(arguments=arguments, defeats=defeats)
     return grounded_extension(framework)
-
-
-def import_local_argumentation() -> tuple[Any, Any, Any] | str:
-    root = Path(__file__).resolve().parents[2]
-    src = root / "src"
-    if str(src) not in sys.path:
-        sys.path.insert(0, str(src))
-    try:
-        from argumentation.dung import ArgumentationFramework, grounded_extension
-        from argumentation.ranking import categoriser_scores
-    except ImportError as exc:
-        return str(exc)
-    return ArgumentationFramework, grounded_extension, categoriser_scores

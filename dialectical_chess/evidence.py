@@ -24,6 +24,9 @@ class ArgumentEvidence:
     supports_argument: bool
     counts_as_positional: bool
     counts_as_tactical: bool
+    tactical_threat_value: int = 0
+    search_refutation_score: int | None = None
+    search_support_score: int | None = None
 
 
 ARGUMENT_POSITIONAL_REASON_PREFIXES = (
@@ -66,6 +69,9 @@ def to_argument_evidence(label: str) -> ArgumentEvidence:
         supports_argument=positional or tactical,
         counts_as_positional=positional,
         counts_as_tactical=tactical,
+        tactical_threat_value=tactical_threat_value(label),
+        search_refutation_score=search_refutation_score(label),
+        search_support_score=search_support_score(label),
     )
 
 
@@ -115,3 +121,29 @@ def tactical_threat_value(reason: str) -> int:
         return int(parts[5])
     except ValueError:
         return 0
+
+
+def search_refutation_score(label: str) -> int | None:
+    prefix = "search_refutes:"
+    if not label.startswith(prefix):
+        return None
+    parts = label.split(":")
+    if len(parts) != 3:
+        return None
+    try:
+        return int(parts[2])
+    except ValueError:
+        return None
+
+
+def search_support_score(label: str) -> int | None:
+    prefix = "search_support:"
+    if not label.startswith(prefix):
+        return None
+    parts = label.split(":")
+    if len(parts) != 3:
+        return None
+    try:
+        return int(parts[2])
+    except ValueError:
+        return None

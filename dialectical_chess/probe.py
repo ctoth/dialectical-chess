@@ -183,9 +183,6 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         if search_result is not None:
             search_line_label = "search_line:" + "-".join(search_result.line)
             if search_result.score > 0:
-                removed_opening_objections = remove_supported_premature_minor_check(objections)
-                if removed_opening_objections:
-                    score += 900 * removed_opening_objections
                 reasons.append(f"search:{settings.search.backend}:{search_result.score}")
                 reasons.append(f"search_support:{settings.search.backend}:{search_result.score}")
                 reasons.append(search_line_label)
@@ -256,18 +253,6 @@ def has_reply_mate_in_one_objection(objections: list[str]) -> bool:
         objection.startswith("tactical:allows_reply_mate_in_one:")
         for objection in objections
     )
-
-
-def remove_supported_premature_minor_check(objections: list[str]) -> int:
-    kept = [
-        objection
-        for objection in objections
-        if not objection.startswith("opening:premature_minor_check:")
-    ]
-    removed = len(objections) - len(kept)
-    if removed:
-        objections[:] = kept
-    return removed
 
 
 def unsupported_major_drift_objections(
