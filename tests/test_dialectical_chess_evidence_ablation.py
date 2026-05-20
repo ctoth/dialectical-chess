@@ -760,6 +760,23 @@ def test_search_probe_reasons_include_structured_support_and_refutation() -> Non
     assert "search_line:a2b2" in probes["a2b2"].objections
 
 
+def test_argument_selector_rejects_large_search_refuted_material_sacrifice() -> None:
+    board = owned_board_from_fen("rnbqkbnr/pb1p1pp1/1p2p3/2p4p/2B1P3/2N5/PPPPNPPP/R1BQK2R w KQkq c6 0 6")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "c4e6"
+
+
 def test_engine_settings_can_disable_smt_fork_witnesses() -> None:
     from dialectical_chess.engine import DialecticalChessEngine
 

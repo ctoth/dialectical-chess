@@ -28,6 +28,7 @@ TACTICAL_REASON_PREFIXES = (
     "search_support:",
 )
 POSITIONAL_SCORE_BONUS = 25
+LARGE_SEARCH_REFUTATION_THRESHOLD = -500
 
 
 @dataclass(frozen=True)
@@ -267,6 +268,8 @@ def severe_objection_count(probe: MoveProbe) -> int:
 def severe_objection_weight(objection: str) -> int:
     if is_forced_mate_refutation(objection):
         return 3
+    if is_large_search_refutation(objection):
+        return 1
     if objection.startswith("tactical:allows_reply_mate_in_one:"):
         return 3
     if objection.startswith("safety:queen_blunder:"):
@@ -285,17 +288,26 @@ def severe_objection_weight(objection: str) -> int:
 
 
 def is_forced_mate_refutation(objection: str) -> bool:
+    score = search_refutation_score(objection)
+    return score is not None and score <= -100_000
+
+
+def is_large_search_refutation(objection: str) -> bool:
+    score = search_refutation_score(objection)
+    return score is not None and score <= LARGE_SEARCH_REFUTATION_THRESHOLD
+
+
+def search_refutation_score(objection: str) -> int | None:
     prefix = "search_refutes:"
     if not objection.startswith(prefix):
-        return False
+        return None
     parts = objection.split(":")
     if len(parts) != 3:
-        return False
+        return None
     try:
-        score = int(parts[2])
+        return int(parts[2])
     except ValueError:
-        return False
-    return score <= -100_000
+        return None
 
 
 def is_positional_reason(reason: str) -> bool:
