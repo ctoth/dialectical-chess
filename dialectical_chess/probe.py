@@ -232,6 +232,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             board,
             legal_moves,
             probes,
+            dialectic_depth=settings.dialectic_depth,
             search_depth=settings.search.depth,
         )
     return sorted(probes, key=lambda probe: (-probe.score, probe.uci))
@@ -580,6 +581,8 @@ def reply_forced_mate_objections(
     *,
     mate_depth: int,
 ) -> tuple[tuple[str, ...], int]:
+    if owned_is_checkmate(child):
+        return (), 0
     if not has_forced_mate(chess.Board(child.fen()), mate_depth=mate_depth):
         return (), 0
     return (f"tactical:allows_reply_forced_mate_in_{mate_depth}:{move.uci()}",), -100_000
@@ -590,9 +593,12 @@ def scan_forced_reply_mates_for_candidate_moves(
     legal_moves: list[Any],
     probes: list[MoveProbe],
     *,
+    dialectic_depth: int,
     search_depth: int,
 ) -> list[MoveProbe]:
     if search_depth not in {0, 1, 2}:
+        return probes
+    if search_depth == 0 and dialectic_depth != 0:
         return probes
     if search_depth == 0:
         candidate_limit = 12

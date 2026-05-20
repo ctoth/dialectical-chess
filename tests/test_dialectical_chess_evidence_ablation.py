@@ -514,6 +514,7 @@ def test_depth_zero_checks_forced_reply_mate_for_top_candidates() -> None:
         probe.uci: probe
         for probe in probe_moves(
             board,
+            dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
             smt_mate=False,
@@ -544,6 +545,7 @@ def test_depth_zero_checks_forced_reply_mate_for_top_king_moves() -> None:
         probe.uci: probe
         for probe in probe_moves(
             board,
+            dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
             smt_mate=False,
