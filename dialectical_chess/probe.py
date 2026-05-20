@@ -142,7 +142,13 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
             objections.extend(flank_objections)
             score += flank_score
-            if should_scan_reply_mate(settings.search.depth, board, move, objections):
+            if should_scan_reply_mate(
+                settings.search.depth,
+                board,
+                move,
+                captured_value=captured_value,
+                objections=objections,
+            ):
                 reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
                 objections.extend(reply_mate_objections)
                 score += reply_mate_score
@@ -542,6 +548,8 @@ def should_scan_reply_mate(
     search_depth: int,
     board: OwnedBoard,
     move: Any,
+    *,
+    captured_value: int,
     objections: list[str],
 ) -> bool:
     if search_depth == 0:
@@ -550,6 +558,8 @@ def should_scan_reply_mate(
         return False
     piece = board.piece_at(move.from_square)
     if piece is not None and piece.lower() == "k":
+        return True
+    if captured_value >= OWNED_PIECE_VALUE["n"]:
         return True
     return any(
         objection.startswith("king_safety:")
