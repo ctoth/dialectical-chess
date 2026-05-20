@@ -299,6 +299,8 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
         return 6
     if objection.startswith("tactical:allows_reply_forced_mate_in_"):
         return 3
+    if objection.startswith("tactical:search_refuted_overreach:"):
+        return 2
     if objection.startswith("safety:queen_blunder:"):
         return 2
     if objection.startswith("safety:ignored_hanging_piece:"):

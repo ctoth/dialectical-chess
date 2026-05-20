@@ -7,7 +7,7 @@ from typing import Any
 
 import chess
 
-from dialectical_chess.arguments import MoveProbe
+from dialectical_chess.arguments import MoveProbe, tactical_threat_value
 from dialectical_chess.board import OwnedBoard, file_of, opposite, piece_color, rank_of, square_index, square_name
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.search import (
@@ -186,6 +186,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 objections.append(f"search:{settings.search.backend}:{search_result.score}")
                 objections.append(f"search_refutes:{settings.search.backend}:{search_result.score}")
                 objections.append(search_line_label)
+                if search_result.score <= -500 and has_tactical_threat_at_least(reasons, 1_000):
+                    objections.append(f"tactical:search_refuted_overreach:{move.uci()}:{search_result.score}")
+                    score -= 700
             score += search_result.score
             if (
                 settings.search.depth == 1
@@ -824,6 +827,10 @@ def has_material_capture_at_least(reasons: list[str], threshold: int) -> bool:
         except ValueError:
             continue
     return False
+
+
+def has_tactical_threat_at_least(reasons: list[str], threshold: int) -> bool:
+    return any(tactical_threat_value(reason) >= threshold for reason in reasons)
 
 
 def has_search_refutation_at_most(objections: list[str], threshold: int) -> bool:
