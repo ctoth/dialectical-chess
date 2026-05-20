@@ -79,22 +79,6 @@ def test_engine_returns_null_decision_for_no_legal_moves() -> None:
     assert decision.selected is None
 
 
-def test_score_selector_choose_move_skips_argument_graph(monkeypatch) -> None:
-    import dialectical_chess.engine as engine
-    from dialectical_chess.engine import DialecticalChessEngine, EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-
-    def fail_graph_build(_probes):
-        raise AssertionError("score selector should not build an argument graph")
-
-    monkeypatch.setattr(engine, "build_root_argument_graph", fail_graph_build)
-    board = owned_board_from_fen("7k/6pp/8/8/8/8/6PP/R5K1 w - - 0 1")
-
-    decision = DialecticalChessEngine(EngineSettings(selector_mode="score")).choose_move(board)
-
-    assert decision.move_uci == "a1a8"
-
-
 def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
     import dialectical_chess.bench as bench
     from dialectical_chess.arguments import MoveProbe
@@ -185,20 +169,6 @@ def test_uci_go_uses_lower_depth_when_clock_is_low() -> None:
 
     assert adjusted.search_depth == 1
     assert adjusted.search_backend == "alphabeta"
-
-
-def test_uci_go_uses_score_selector_when_clock_is_critical() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
-
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
-
-    adjusted = settings_for_go(settings, board, "go wtime 1500 btime 9000 winc 100 binc 100")
-
-    assert adjusted.search_depth == 0
-    assert adjusted.selector_mode == "score"
 
 
 def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:

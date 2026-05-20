@@ -11,7 +11,6 @@ from dialectical_chess.arguments import (
     SELECTOR_MODES,
     build_root_argument_graph,
     choose_move,
-    score_selection_key,
 )
 from dialectical_chess.probe import probe_moves
 from dialectical_chess.search import ReplyAnalysisSettings
@@ -78,22 +77,4 @@ class DialecticalChessEngine:
         return EngineAnalysis(probes=probes, graph=graph, decision=decision)
 
     def choose_move(self, board: Any) -> EngineDecision:
-        if self.settings.selector_mode == "score":
-            probes = tuple(
-                probe_moves(
-                    board,
-                    dialectic_depth=self.settings.dialectic_depth,
-                    search_depth=self.settings.search_depth,
-                    search_backend=self.settings.search_backend,
-                    smt_mate=self.settings.smt_mate,
-                    smt_fork=self.settings.smt_fork,
-                    positional_reasons=self.settings.positional_reasons,
-                    reply_analysis=self.settings.reply_analysis,
-                )
-            )
-            selected = sorted(probes, key=score_selection_key)[0] if probes else None
-            return EngineDecision(
-                move_uci="0000" if selected is None else selected.uci,
-                selected=selected,
-            )
         return self.analyze(board).decision
