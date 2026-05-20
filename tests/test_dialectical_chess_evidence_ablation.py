@@ -414,6 +414,38 @@ def test_premature_queen_objection_beats_tactical_count_tie_breaks() -> None:
     assert choose_move(probes, graph, selector_mode="argument") == safe
 
 
+def test_premature_minor_check_gets_development_objection() -> None:
+    board = owned_board_from_fen("r1bqkbnr/pppp1ppp/2n1p3/8/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_fork=False,
+        )
+    }
+
+    assert "opening:premature_minor_check:f8b4:undeveloped_minors:3" in probes["f8b4"].objections
+
+
+def test_argument_selector_rejects_premature_minor_check() -> None:
+    board = owned_board_from_fen("r1bqkbnr/pppp1ppp/2n1p3/8/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3")
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=0,
+            search_depth=2,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=False,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci != "f8b4"
+
+
 def test_argument_selector_rejects_search_proven_forced_mate() -> None:
     board = owned_board_from_fen("4k2r/1p2bppp/p4n2/6N1/P3rn2/4Q3/1P1P1K1q/R1B5 w k - 0 24")
 

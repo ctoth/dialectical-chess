@@ -286,6 +286,7 @@ def severe_objection_weight(objection: str, probe: MoveProbe | None = None) -> i
         or objection.startswith("opening:king_center_flight:")
         or objection.startswith("opening:premature_queen:")
         or objection.startswith("opening:premature_rook:")
+        or objection.startswith("opening:premature_minor_check:")
         or objection.startswith("opening:minor_retreat:")
         or objection.startswith("king_safety:flank_pawn_weakening:")
         or objection.startswith("king_safety:castled_flank_pawn_weakening:")

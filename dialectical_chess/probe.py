@@ -297,9 +297,20 @@ def opening_development_objections(
         return (), 0
     color = piece_color(piece)
     kind = piece.lower()
+    undeveloped_minors = undeveloped_minor_count(board, color)
+    if (
+        kind in {"n", "b"}
+        and gives_check
+        and captured_value == 0
+        and board.fullmove_number <= 10
+        and undeveloped_minors >= 2
+    ):
+        return (
+            (f"opening:premature_minor_check:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
+            -900,
+        )
     if kind not in {"q", "r"}:
         return (), 0
-    undeveloped_minors = undeveloped_minor_count(board, color)
     if captured_value >= OWNED_PIECE_VALUE["n"]:
         return (), 0
     if kind == "r" and captured_value == 0 and board.fullmove_number <= 20:
