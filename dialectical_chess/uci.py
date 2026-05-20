@@ -192,6 +192,8 @@ def settings_for_go(settings: EngineSettings, board, command: str) -> EngineSett
         search_depth = min(search_depth, 0)
     elif remaining <= 20_000:
         search_depth = min(search_depth, 1)
+    else:
+        search_depth = max(search_depth, 2)
     if search_depth == settings.search_depth:
         return settings
     return replace(settings, search_depth=search_depth)
