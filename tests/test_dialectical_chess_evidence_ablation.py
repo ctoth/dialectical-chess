@@ -177,6 +177,37 @@ def test_argument_selector_rejects_opening_king_walk() -> None:
     assert decision.move_uci == "b5c6"
 
 
+def test_king_walk_objection_beats_tactical_count_tie_breaks() -> None:
+    safe = MoveProbe(
+        uci="g1f3",
+        san="g1f3",
+        score=40,
+        is_checkmate=False,
+        gives_check=False,
+        is_capture=False,
+        captured_value=0,
+        promotion_value=0,
+        reasons=("development:g1f3:minor_piece",),
+        objections=(),
+    )
+    king_walk = MoveProbe(
+        uci="e1d2",
+        san="e1d2",
+        score=100,
+        is_checkmate=False,
+        gives_check=False,
+        is_capture=False,
+        captured_value=0,
+        promotion_value=0,
+        reasons=("tactical:threat:targets:2:value:500",),
+        objections=("opening:king_walk:e1d2",),
+    )
+    probes = [king_walk, safe]
+    graph = build_root_argument_graph(probes)
+
+    assert choose_move(probes, graph, selector_mode="argument") == safe
+
+
 def test_early_rook_shuffle_gets_opening_objection() -> None:
     board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/2n1p3/p7/3PP3/2PB4/PP3PPP/RNBQK1NR b KQkq - 1 4")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

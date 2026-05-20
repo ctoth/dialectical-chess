@@ -265,6 +265,7 @@ def severe_objection_count(probe: MoveProbe) -> int:
         1
         for objection in probe.objections
         if objection.startswith("safety:queen_blunder:")
+        or objection.startswith("opening:king_walk:")
         or is_forced_mate_refutation(objection)
     )
 
