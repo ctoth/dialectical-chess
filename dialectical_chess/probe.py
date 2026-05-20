@@ -148,9 +148,10 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
             objections.extend(flank_objections)
             score += flank_score
-            escape_reasons, escape_score = king_escape_square_reasons(board, move, child)
-            reasons.extend(escape_reasons)
-            score += escape_score
+            if settings.positional_reasons:
+                escape_reasons, escape_score = king_escape_square_reasons(board, move, child)
+                reasons.extend(escape_reasons)
+                score += escape_score
             if settings.reply_mate_scan and should_scan_reply_mate(
                 settings.search.depth,
                 board,
