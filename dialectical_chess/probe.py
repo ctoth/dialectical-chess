@@ -8,7 +8,16 @@ from typing import Any
 import chess
 
 from dialectical_chess.arguments import MoveProbe
-from dialectical_chess.board import OwnedBoard, file_of, opposite, piece_color, rank_of, square_index, square_name
+from dialectical_chess.board import (
+    OwnedBoard,
+    file_of,
+    opposite,
+    piece_color,
+    rank_of,
+    square_from_file_rank,
+    square_index,
+    square_name,
+)
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.search import (
     OWNED_PIECE_VALUE,
@@ -587,9 +596,9 @@ def scan_forced_reply_mates_for_candidate_moves(
     *,
     search_depth: int,
 ) -> list[MoveProbe]:
-    if search_depth not in {1, 2}:
+    if search_depth not in {0, 1, 2}:
         return probes
-    candidate_limit = 6 if search_depth == 1 else 12
+    candidate_limit = 4 if search_depth == 0 else (6 if search_depth == 1 else 12)
     move_by_uci = {move.uci(): move for move in legal_moves}
     legal_move_count = len(legal_moves)
     scan_depth_one_mate_three = (
@@ -599,7 +608,10 @@ def scan_forced_reply_mates_for_candidate_moves(
     )
     updated: dict[str, MoveProbe] = {}
     scanned: set[str] = set()
-    scan_budget = candidate_limit * 3 if search_depth == 1 else candidate_limit
+    if search_depth in {0, 1}:
+        scan_budget = candidate_limit * 3
+    else:
+        scan_budget = candidate_limit
     while len(scanned) < scan_budget:
         current_probes = [updated.get(probe.uci, probe) for probe in probes]
         made_progress = False
@@ -617,7 +629,11 @@ def scan_forced_reply_mates_for_candidate_moves(
             scanned.add(probe.uci)
             made_progress = True
             move = move_by_uci[probe.uci]
-            mate_depths = (2, 3) if scan_depth_one_mate_three else ((2,) if search_depth == 1 else (2, 3))
+            mate_depths = (
+                (2, 3)
+                if scan_depth_one_mate_three
+                else ((2,) if search_depth in {0, 1} else (2, 3))
+            )
             child = board.apply(move)
             forced_mate_objections: tuple[str, ...] = ()
             forced_mate_score = 0
@@ -638,7 +654,7 @@ def scan_forced_reply_mates_for_candidate_moves(
             )
         if not made_progress:
             break
-        if search_depth != 1:
+        if search_depth not in {0, 1}:
             break
         if len(scanned) >= scan_budget:
             break
@@ -659,7 +675,8 @@ def forced_reply_mate_scan_candidates(
     eligible = [
         probe
         for probe in probes
-        if should_scan_reply_forced_mate(
+        if not probe.is_checkmate
+        and should_scan_reply_forced_mate(
             search_depth,
             board,
             move_by_uci[probe.uci],
@@ -741,11 +758,13 @@ def should_scan_reply_forced_mate(
     objections: list[str],
     legal_move_count: int | None = None,
 ) -> bool:
-    if search_depth not in {1, 2}:
+    if search_depth not in {0, 1, 2}:
         return False
     piece = board.piece_at(move.from_square)
     if piece is None:
         return False
+    if search_depth == 0:
+        return king_ring_attack_count(board) >= 2
     if search_depth == 1:
         if piece.lower() == "k":
             return True
@@ -807,6 +826,22 @@ def has_material_capture_at_least(reasons: list[str], threshold: int) -> bool:
         except ValueError:
             continue
     return False
+
+
+def king_ring_attack_count(board: OwnedBoard) -> int:
+    king = board.king_square(board.turn)
+    king_file = file_of(king)
+    king_rank = rank_of(king)
+    attacker = opposite(board.turn)
+    attacked = 0
+    for file_delta in (-1, 0, 1):
+        for rank_delta in (-1, 0, 1):
+            if file_delta == 0 and rank_delta == 0:
+                continue
+            square = square_from_file_rank(king_file + file_delta, king_rank + rank_delta)
+            if square is not None and board.is_square_attacked(square, attacker):
+                attacked += 1
+    return attacked
 
 
 def has_search_refutation_at_most(objections: list[str], threshold: int) -> bool:
