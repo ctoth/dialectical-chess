@@ -332,6 +332,8 @@ def severe_objection_weight(objection: str) -> int:
         return 1
     if objection.startswith("king_safety:queen_flank_invasion:"):
         return 2
+    if objection.startswith("king_safety:unanswered_advanced_flank_pawn:"):
+        return 4
     if objection.startswith("strategy:unsupported_major_drift:"):
         return 1
     if (
@@ -392,6 +394,13 @@ def has_search_support(probe: MoveProbe) -> bool:
     return any(reason.startswith("search_support:") for reason in probe.reasons)
 
 
+def has_advanced_flank_pawn_response(probe: MoveProbe) -> bool:
+    return any(
+        reason.startswith("king_safety:advanced_flank_pawn_response:")
+        for reason in probe.reasons
+    )
+
+
 def objection_defeaters(probe: MoveProbe, objection: str) -> tuple[str, ...]:
     defeaters = []
     if objection.startswith("safety:queen_blunder:") and has_compensating_forcing_pressure(probe):
@@ -403,6 +412,10 @@ def objection_defeaters(probe: MoveProbe, objection: str) -> tuple[str, ...]:
             defeaters.append("forcing_material_gain")
     if objection.startswith("opening:premature_minor_check:") and has_search_support(probe):
         defeaters.append("search_support")
+    if objection.startswith("king_safety:flank_pawn_weakening:") and has_advanced_flank_pawn_response(probe):
+        defeaters.append("advanced_flank_pawn_response")
+    if objection.startswith("king_safety:flank_pawn_lunge:") and has_advanced_flank_pawn_response(probe):
+        defeaters.append("advanced_flank_pawn_response")
     return tuple(defeaters)
 
 
@@ -424,6 +437,8 @@ def extra_support_copies(evidence: ArgumentEvidence) -> int:
         return 16
     if evidence.label.startswith("material:capture:"):
         return material_support_copies(evidence.label)
+    if evidence.label.startswith("king_safety:advanced_flank_pawn_response:"):
+        return 12
     if evidence.label.startswith("piece_safety:defended:"):
         return defended_piece_support_copies(evidence.label)
     if evidence.label == "tactical:check":
@@ -474,6 +489,8 @@ def defended_piece_support_copies(label: str) -> int:
 def extra_defeater_copies(defeater: str) -> int:
     if defeater == "search_support":
         return 96
+    if defeater == "advanced_flank_pawn_response":
+        return 32
     if defeater in {"compensating_forcing_pressure", "forcing_material_gain"}:
         return 32
     if defeater == "compensating_tactical_pressure":

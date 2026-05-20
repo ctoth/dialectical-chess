@@ -1448,6 +1448,42 @@ def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
     assert decision.move_uci == "g7g6"
 
 
+def test_argument_selector_answers_advanced_flank_pawn() -> None:
+    board = owned_board_from_fen("r1bqk2r/ppppnppp/2nbp2P/8/3PP3/2P1B3/PP3PP1/RN1QKBNR b KQkq - 0 7")
+
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+        )
+    }
+
+    assert "king_safety:advanced_flank_pawn_response:g7h6" in probes["g7h6"].reasons
+    assert "king_safety:advanced_flank_pawn_response:g7g6" in probes["g7g6"].reasons
+    assert any(
+        objection.startswith("king_safety:unanswered_advanced_flank_pawn:f7f6:h6:g7")
+        for objection in probes["f7f6"].objections
+    )
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=2,
+            search_depth=1,
+            search_backend="alphabeta",
+            smt_mate=True,
+            smt_fork=True,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci in {"g7h6", "g7g6"}
+
+
 def test_queen_flank_invasion_gets_king_safety_objection() -> None:
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}

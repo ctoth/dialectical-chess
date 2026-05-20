@@ -142,6 +142,14 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             flank_pawn_objections, flank_pawn_score = flank_pawn_weakening_objections(board, move)
             objections.extend(flank_pawn_objections)
             score += flank_pawn_score
+            flank_response_reasons, flank_unanswered_objections, flank_response_score = advanced_flank_pawn_response_labels(
+                board,
+                move,
+                child,
+            )
+            reasons.extend(flank_response_reasons)
+            objections.extend(flank_unanswered_objections)
+            score += flank_response_score
             ignored_objections, ignored_score = ignored_hanging_piece_objections(board, move, child)
             objections.extend(ignored_objections)
             score += ignored_score
@@ -534,6 +542,42 @@ def flank_pawn_weakening_objections(
         labels.append(f"king_safety:flank_pawn_lunge:{move.uci()}")
         score -= 400
     return tuple(labels), score
+
+
+def advanced_flank_pawn_response_labels(
+    board: OwnedBoard,
+    move: Any,
+    child: OwnedBoard,
+) -> tuple[tuple[str, ...], tuple[str, ...], int]:
+    threats = advanced_flank_pawn_threats(board, board.turn)
+    if not threats:
+        return (), (), 0
+    child_threats = advanced_flank_pawn_threats(child, board.turn)
+    if len(child_threats) < len(threats):
+        return (f"king_safety:advanced_flank_pawn_response:{move.uci()}",), (), 1_200
+    labels = tuple(
+        f"king_safety:unanswered_advanced_flank_pawn:{move.uci()}:{square_name(pawn_square)}:{square_name(target_square)}"
+        for pawn_square, target_square in threats
+    )
+    return (), labels, -1_500 * len(labels)
+
+
+def advanced_flank_pawn_threats(
+    board: OwnedBoard,
+    color: str,
+) -> tuple[tuple[int, int], ...]:
+    opponent = opposite(color)
+    threats: list[tuple[int, int]] = []
+    for target_square in sorted(king_flank_pawn_squares(color)):
+        target_piece = board.piece_at(target_square)
+        if target_piece is None or piece_color(target_piece) != color:
+            continue
+        for pawn_square, pawn in enumerate(board.squares):
+            if pawn is None or pawn.lower() != "p" or piece_color(pawn) != opponent:
+                continue
+            if moved_piece_attacks_square(board, pawn_square, target_square, pawn):
+                threats.append((pawn_square, target_square))
+    return tuple(sorted(set(threats)))
 
 
 def ignored_hanging_piece_objections(
