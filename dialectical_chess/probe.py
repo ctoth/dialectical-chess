@@ -186,7 +186,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 objections.append(f"search:{settings.search.backend}:{search_result.score}")
                 objections.append(f"search_refutes:{settings.search.backend}:{search_result.score}")
                 objections.append(search_line_label)
-                if search_result.score <= -500 and has_tactical_threat_at_least(reasons, 1_000):
+                if search_result.score <= -500 and has_tactical_threat_at_least(reasons, 500):
                     objections.append(f"tactical:search_refuted_overreach:{move.uci()}:{search_result.score}")
                     score -= 700
             score += search_result.score
