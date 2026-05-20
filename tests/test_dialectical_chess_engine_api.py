@@ -232,17 +232,3 @@ def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
     adjusted = settings_for_go(settings, board, "go wtime 25000 btime 30000 winc 200 binc 200")
 
     assert adjusted is settings
-
-
-def test_uci_go_uses_deeper_search_when_clock_is_healthy() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
-
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=1, search_backend="alphabeta")
-
-    adjusted = settings_for_go(settings, board, "go wtime 25000 btime 30000 winc 200 binc 200")
-
-    assert adjusted.search_depth == 2
-    assert adjusted.search_backend == "alphabeta"
