@@ -278,6 +278,7 @@ def severe_objection_weight(objection: str) -> int:
         or objection.startswith("opening:premature_queen:")
         or objection.startswith("opening:premature_rook:")
         or objection.startswith("king_safety:flank_pawn_weakening:")
+        or objection.startswith("king_safety:castled_flank_pawn_weakening:")
     ):
         return 1
     return 0

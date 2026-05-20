@@ -340,9 +340,13 @@ def flank_pawn_weakening_objections(
     if piece is None or piece.lower() != "p" or board.fullmove_number > 20:
         return (), 0
     color = piece_color(piece)
-    if file_of(move.from_square) not in {6, 7}:
-        return (), 0
-    if king_is_castled(board, color):
+    king_square = board.king_square(color)
+    from_file = file_of(move.from_square)
+    if king_square in {square_index("g1"), square_index("g8")} and from_file in {6, 7}:
+        return ((f"king_safety:castled_flank_pawn_weakening:{move.uci()}",), -900)
+    if king_square in {square_index("c1"), square_index("c8")} and from_file in {0, 1, 2}:
+        return ((f"king_safety:castled_flank_pawn_weakening:{move.uci()}",), -900)
+    if from_file not in {6, 7}:
         return (), 0
     return ((f"king_safety:flank_pawn_weakening:{move.uci()}",), -900)
 

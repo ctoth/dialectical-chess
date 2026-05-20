@@ -352,6 +352,44 @@ def test_castled_flank_pawn_push_does_not_get_uncastled_objection() -> None:
     assert "king_safety:flank_pawn_weakening:g2g4" not in probes["g2g4"].objections
 
 
+def test_castled_flank_pawn_push_gets_king_shield_objection() -> None:
+    board = owned_board_from_fen("4k3/8/8/8/8/8/6PP/6K1 w - - 0 14")
+    probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}
+
+    assert "king_safety:castled_flank_pawn_weakening:g2g4" in probes["g2g4"].objections
+
+
+def test_argument_selector_rejects_castled_flank_pawn_weakening() -> None:
+    safe = MoveProbe(
+        uci="b1c3",
+        san="b1c3",
+        score=40,
+        is_checkmate=False,
+        gives_check=False,
+        is_capture=False,
+        captured_value=0,
+        promotion_value=0,
+        reasons=("development:b1c3:minor_piece",),
+        objections=(),
+    )
+    weakening = MoveProbe(
+        uci="g2g4",
+        san="g2g4",
+        score=100,
+        is_checkmate=False,
+        gives_check=False,
+        is_capture=False,
+        captured_value=0,
+        promotion_value=0,
+        reasons=("tactical:threat:targets:1:value:900",),
+        objections=("king_safety:castled_flank_pawn_weakening:g2g4",),
+    )
+    probes = [weakening, safe]
+    graph = build_root_argument_graph(probes)
+
+    assert choose_move(probes, graph, selector_mode="argument") == safe
+
+
 def test_queen_flank_invasion_gets_king_safety_objection() -> None:
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
