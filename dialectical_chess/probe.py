@@ -575,9 +575,10 @@ def scan_forced_reply_mates_for_candidate_moves(
     if search_depth not in {1, 2}:
         return probes
     mate_depth = 2 if search_depth == 1 else 3
+    candidate_limit = 6 if search_depth == 1 else 12
     move_by_uci = {move.uci(): move for move in legal_moves}
     updated: dict[str, MoveProbe] = {}
-    for probe in sorted(probes, key=lambda candidate: (-candidate.score, candidate.uci))[:12]:
+    for probe in sorted(probes, key=lambda candidate: (-candidate.score, candidate.uci))[:candidate_limit]:
         move = move_by_uci[probe.uci]
         if not should_scan_reply_forced_mate(
             search_depth,
