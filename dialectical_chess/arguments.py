@@ -11,15 +11,17 @@ from argumentation.vaf import ValueBasedArgumentationFramework
 
 from dialectical_chess.evidence import (
     ArgumentEvidence,
-    EvidenceWorld,
+    DefeaterKind,
+    ObjectionKind,
+    LARGE_SEARCH_REFUTATION_THRESHOLD,
+    is_defensible_reply_attack,
+    is_forced_mate_refutation as evidence_is_forced_mate_refutation,
     is_undefended_reply_capture,
-    search_refutation_score,
     to_argument_evidence,
 )
 
 SELECTOR_MODES = frozenset({"argument", "score", "grounded", "support", "categoriser", "optimizer"})
 POSITIONAL_SCORE_BONUS = 25
-LARGE_SEARCH_REFUTATION_THRESHOLD = -500
 COMPENSATING_TACTICAL_THREAT_THRESHOLD = 700
 
 
@@ -40,6 +42,26 @@ class MoveProbe:
     search_line: tuple[str, ...] = ()
     smt_witnesses: tuple[str, ...] = ()
     optimizer_trace: dict[str, Any] = field(default_factory=dict)
+    reason_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)
+    objection_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)
+    reply_attack_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "reason_evidence",
+            tuple(to_argument_evidence(reason) for reason in self.reasons),
+        )
+        object.__setattr__(
+            self,
+            "objection_evidence",
+            tuple(to_argument_evidence(objection) for objection in self.objections),
+        )
+        object.__setattr__(
+            self,
+            "reply_attack_evidence",
+            tuple(to_argument_evidence(reply_attack) for reply_attack in self.reply_attacks),
+        )
 
 
 @dataclass(frozen=True)
@@ -270,30 +292,20 @@ def effective_score(probe: MoveProbe, mode: str) -> int:
 
 
 def positional_reason_count(probe: MoveProbe) -> int:
-    return sum(1 for reason in probe.reasons if to_argument_evidence(reason).counts_as_positional)
+    return sum(1 for evidence in probe.reason_evidence if evidence.counts_as_positional)
 
 
 def soft_positional_reason_count(probe: MoveProbe) -> int:
     return sum(
         1
-        for reason in probe.reasons
-        if to_argument_evidence(reason).counts_as_positional
-        and not is_concrete_non_queen_piece_safety(reason)
+        for evidence in probe.reason_evidence
+        if evidence.counts_as_positional
+        and not is_concrete_non_queen_piece_safety(evidence)
     )
 
 
-def is_concrete_non_queen_piece_safety(reason: str) -> bool:
-    prefix = "piece_safety:defended:"
-    if not reason.startswith(prefix):
-        return False
-    parts = reason.split(":")
-    if len(parts) != 4:
-        return False
-    try:
-        moved_value = int(parts[3])
-    except ValueError:
-        return False
-    return moved_value < 900
+def is_concrete_non_queen_piece_safety(evidence: ArgumentEvidence) -> bool:
+    return evidence.defended_piece_value is not None and evidence.defended_piece_value < 900
 
 
 def material_or_promotion_gain(probe: MoveProbe) -> int:
@@ -301,86 +313,17 @@ def material_or_promotion_gain(probe: MoveProbe) -> int:
 
 
 def severe_objection_count(probe: MoveProbe) -> int:
-    return sum(severe_objection_weight(objection) for objection in probe.objections)
+    return sum(evidence.objection_strength for evidence in probe.objection_evidence)
 
 
 def has_forced_mate_refutation(probe: MoveProbe) -> bool:
-    return any(
-        is_forced_mate_refutation(objection)
-        or objection.startswith("tactical:allows_reply_mate_in_one:")
-        or objection.startswith("tactical:allows_reply_forced_mate_in_")
-        for objection in probe.objections
-    )
-
-
-def severe_objection_weight(objection: str) -> int:
-    if is_forced_mate_refutation(objection):
-        return 6
-    if is_large_search_refutation(objection):
-        return 1
-    if objection.startswith("smt:fork:high_value_piece:"):
-        return 3
-    if objection.startswith("tactical:allows_reply_mate_in_one:") or objection.startswith(
-        "tactical:allows_reply_forced_mate_in_2:"
-    ):
-        return 6
-    if objection.startswith("tactical:allows_reply_forced_mate_in_"):
-        return 3
-    if objection.startswith("safety:queen_blunder:"):
-        return 2
-    if objection.startswith("safety:ignored_hanging_piece:"):
-        return 1
-    if is_moved_minor_or_major_en_pris(objection):
-        return 1
-    if objection.startswith("king_safety:queen_flank_invasion:"):
-        return 2
-    if objection.startswith("king_safety:unanswered_advanced_flank_pawn:"):
-        return 4
-    if objection.startswith("strategy:unsupported_major_drift:"):
-        return 1
-    if objection.startswith("strategy:immediate_repetition:"):
-        return 2
-    if (
-        objection.startswith("opening:king_walk:")
-        or objection.startswith("opening:king_center_flight:")
-        or objection.startswith("opening:premature_queen:")
-        or objection.startswith("opening:premature_rook:")
-        or objection.startswith("opening:minor_retreat:")
-        or objection.startswith("king_safety:flank_pawn_weakening:")
-        or objection.startswith("king_safety:castled_flank_pawn_weakening:")
-        or objection.startswith("king_safety:flank_pawn_lunge:")
-    ):
-        return 1
-    if objection.startswith("opening:premature_minor_check:"):
-        return 1
-    return 0
-
-
-def is_forced_mate_refutation(objection: str) -> bool:
-    score = search_refutation_score(objection)
-    return score is not None and score <= -100_000
-
-
-def is_large_search_refutation(objection: str) -> bool:
-    score = search_refutation_score(objection)
-    return score is not None and score <= LARGE_SEARCH_REFUTATION_THRESHOLD
-
-
-def is_moved_minor_or_major_en_pris(objection: str) -> bool:
-    prefix = "safety:moved_piece_en_pris:"
-    if not objection.startswith(prefix):
-        return False
-    try:
-        value = int(objection.removeprefix(prefix))
-    except ValueError:
-        return False
-    return value >= 300
+    return any(evidence_is_forced_mate_refutation(evidence) for evidence in probe.objection_evidence)
 
 
 def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
     return any(
-        to_argument_evidence(reason).tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD
-        for reason in probe.reasons
+        evidence.tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD
+        for evidence in probe.reason_evidence
     )
 
 
@@ -394,33 +337,44 @@ def has_forcing_material_gain(probe: MoveProbe) -> bool:
     return probe.gives_check and material_or_promotion_gain(probe) > 0
 
 
-def has_search_support(probe: MoveProbe) -> bool:
-    return any(reason.startswith("search_support:") for reason in probe.reasons)
+def has_typed_reason_defeater(probe: MoveProbe, defeater_kind: DefeaterKind) -> bool:
+    return any(evidence.defeater_kind == defeater_kind for evidence in probe.reason_evidence)
 
 
-def has_advanced_flank_pawn_response(probe: MoveProbe) -> bool:
-    return any(
-        reason.startswith("king_safety:advanced_flank_pawn_response:")
-        for reason in probe.reasons
-    )
-
-
-def objection_defeaters(probe: MoveProbe, objection: str) -> tuple[str, ...]:
-    defeaters = []
-    if objection.startswith("safety:queen_blunder:") and has_compensating_forcing_pressure(probe):
-        defeaters.append("compensating_forcing_pressure")
-    if is_moved_minor_or_major_en_pris(objection):
+def objection_defeater_evidence(
+    probe: MoveProbe,
+    objection: ArgumentEvidence,
+) -> tuple[ArgumentEvidence, ...]:
+    defeaters: list[ArgumentEvidence] = []
+    if (
+        objection.objection_kind == ObjectionKind.QUEEN_BLUNDER
+        and has_compensating_forcing_pressure(probe)
+    ):
+        defeaters.append(defeater_evidence(DefeaterKind.COMPENSATING_FORCING_PRESSURE))
+    if (
+        objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
+        and objection.moved_piece_en_pris_value is not None
+        and objection.moved_piece_en_pris_value >= 300
+    ):
         if has_compensating_tactical_pressure(probe):
-            defeaters.append("compensating_tactical_pressure")
+            defeaters.append(defeater_evidence(DefeaterKind.COMPENSATING_TACTICAL_PRESSURE))
         if has_forcing_material_gain(probe):
-            defeaters.append("forcing_material_gain")
-    if objection.startswith("opening:premature_minor_check:") and has_search_support(probe):
-        defeaters.append("search_support")
-    if objection.startswith("king_safety:flank_pawn_weakening:") and has_advanced_flank_pawn_response(probe):
-        defeaters.append("advanced_flank_pawn_response")
-    if objection.startswith("king_safety:flank_pawn_lunge:") and has_advanced_flank_pawn_response(probe):
-        defeaters.append("advanced_flank_pawn_response")
+            defeaters.append(defeater_evidence(DefeaterKind.FORCING_MATERIAL_GAIN))
+    if objection.objection_kind == ObjectionKind.OPENING_PREMATURE_MINOR_CHECK and has_typed_reason_defeater(
+        probe,
+        DefeaterKind.SEARCH_SUPPORT,
+    ):
+        defeaters.append(defeater_evidence(DefeaterKind.SEARCH_SUPPORT))
+    if objection.objection_kind in {
+        ObjectionKind.FLANK_PAWN_WEAKENING,
+        ObjectionKind.FLANK_PAWN_LUNGE,
+    } and has_typed_reason_defeater(probe, DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE):
+        defeaters.append(defeater_evidence(DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE))
     return tuple(defeaters)
+
+
+def defeater_evidence(defeater_kind: DefeaterKind) -> ArgumentEvidence:
+    return to_argument_evidence(f"defeater:{defeater_kind.value}")
 
 
 def _accepted_reason_count(
@@ -430,96 +384,39 @@ def _accepted_reason_count(
 ) -> int:
     return sum(
         1
-        for reason in probe.reasons
-        if predicate(graph.evidence[f"reason:{probe.uci}:{reason}"])
-        and f"reason:{probe.uci}:{reason}" in graph.grounded_extension
+        for reason in probe.reason_evidence
+        if predicate(graph.evidence[evidence_argument_id("reason", probe.uci, reason)])
+        and evidence_argument_id("reason", probe.uci, reason) in graph.grounded_extension
     )
 
 
-def extra_support_copies(evidence: ArgumentEvidence) -> int:
-    if evidence.label.startswith("material:promotion:"):
-        return 16
-    if evidence.label.startswith("material:capture:"):
-        return material_support_copies(evidence.label)
-    if evidence.label.startswith("king_safety:advanced_flank_pawn_response:"):
-        return 12
-    if evidence.label.startswith("piece_safety:defended:"):
-        return defended_piece_support_copies(evidence.label)
-    if evidence.label == "tactical:check":
-        return 6
-    if evidence.tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD:
-        return 5
-    if evidence.world in {EvidenceWorld.TERMINAL, EvidenceWorld.PROCEDURAL}:
-        return 8
-    if evidence.world in {EvidenceWorld.SMT, EvidenceWorld.SEARCH}:
-        return 3
-    if evidence.world == EvidenceWorld.TACTICAL:
-        return 2
-    return 0
+def evidence_argument_id(role: str, uci: str, evidence: ArgumentEvidence) -> str:
+    return f"{role}:{uci}:{evidence.label}"
 
 
-def material_support_copies(label: str) -> int:
-    parts = label.split(":")
-    if len(parts) != 3:
-        return 3
-    try:
-        value = int(parts[2])
-    except ValueError:
-        return 3
-    if value >= 500:
-        return 8
-    if value >= 300:
-        return 5
-    if value > 0:
-        return 2
-    return 0
-
-
-def defended_piece_support_copies(label: str) -> int:
-    parts = label.split(":")
-    if len(parts) != 4:
-        return 0
-    try:
-        value = int(parts[3])
-    except ValueError:
-        return 0
-    if value >= 900:
-        return 3
-    if value >= 500:
-        return 2
-    return 0
-
-
-def extra_defeater_copies(defeater: str) -> int:
-    if defeater == "search_support":
-        return 96
-    if defeater == "advanced_flank_pawn_response":
-        return 32
-    if defeater in {"compensating_forcing_pressure", "forcing_material_gain"}:
-        return 32
-    if defeater == "compensating_tactical_pressure":
-        return 16
-    return 1
-
-
-def extra_objection_copies(objection: str) -> int:
-    return max(severe_objection_weight(objection) - 1, 0)
-
-
-def extra_defense_copies(reply_attack: str) -> int:
-    if is_defensible_reply_attack(reply_attack):
-        return 12
-    return 0
-
-
-def extra_reply_attack_copies(reply_attack: str) -> int:
-    if reply_attack.startswith("reply_mate:"):
-        return 6
-    return 0
-
-
-def is_defensible_reply_attack(reply_attack: str) -> bool:
-    return reply_attack.startswith("reply_captures_moved_piece:defended:")
+def add_typed_attack(
+    arguments: set[str],
+    defeats: set[tuple[str, str]],
+    evidence_by_argument: dict[str, ArgumentEvidence],
+    *,
+    attacker: str,
+    target: str,
+    evidence: ArgumentEvidence,
+    strength: int,
+) -> tuple[str, ...]:
+    if strength <= 0:
+        return ()
+    arguments.add(attacker)
+    evidence_by_argument[attacker] = evidence
+    defeats.add((attacker, target))
+    attackers = [attacker]
+    for index in range(1, strength):
+        weighted_attacker = f"{attacker}:strength:{index}"
+        arguments.add(weighted_attacker)
+        evidence_by_argument[weighted_attacker] = evidence
+        defeats.add((weighted_attacker, target))
+        attackers.append(weighted_attacker)
+    return tuple(attackers)
 
 
 def accepted_defense_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
@@ -552,69 +449,84 @@ def build_root_argument_graph(probes: list[MoveProbe]) -> RootArgumentGraph:
         defeats.add((doubt_arg, move_arg))
         support_args: list[str] = []
         objection_defeater_args: list[str] = []
-        for reason in probe.reasons:
-            reason_arg = f"reason:{probe.uci}:{reason}"
+        for reason in probe.reason_evidence:
+            reason_arg = evidence_argument_id("reason", probe.uci, reason)
             arguments.add(reason_arg)
-            reason_evidence = to_argument_evidence(reason)
-            evidence[reason_arg] = reason_evidence
-            if reason_evidence.supports_argument:
-                support_args.append(reason_arg)
-                defeats.add((reason_arg, doubt_arg))
-                for index in range(extra_support_copies(reason_evidence)):
-                    support_arg = f"support:{probe.uci}:{reason}:{index}"
-                    arguments.add(support_arg)
-                    support_args.append(support_arg)
-                    defeats.add((support_arg, doubt_arg))
-            if reason == "terminal:checkmate":
+            evidence[reason_arg] = reason
+            if reason.supports_argument:
+                support_args.extend(
+                    add_typed_attack(
+                        arguments,
+                        defeats,
+                        evidence,
+                        attacker=reason_arg,
+                        target=doubt_arg,
+                        evidence=reason,
+                        strength=reason.support_strength,
+                    )
+                )
+            if reason.label == "terminal:checkmate":
                 for other in probes:
                     if other.uci != probe.uci:
                         defeats.add((reason_arg, move_args[other.uci]))
-        for objection in probe.objections:
-            objection_arg = f"{objection}:{probe.uci}"
-            objection_args = [objection_arg]
-            arguments.add(objection_arg)
-            if severe_objection_weight(objection) > 0:
-                defeats.add((objection_arg, move_arg))
-                for index in range(extra_objection_copies(objection)):
-                    weighted_objection_arg = f"objection:{probe.uci}:{objection}:{index}"
-                    objection_args.append(weighted_objection_arg)
-                    arguments.add(weighted_objection_arg)
-                    defeats.add((weighted_objection_arg, move_arg))
-            for defeater in objection_defeaters(probe, objection):
-                defeater_arg = f"defeater:{probe.uci}:{defeater}"
-                arguments.add(defeater_arg)
-                objection_defeater_args.append(defeater_arg)
+        for objection in probe.objection_evidence:
+            objection_arg = evidence_argument_id("objection", probe.uci, objection)
+            objection_args = list(
+                add_typed_attack(
+                    arguments,
+                    defeats,
+                    evidence,
+                    attacker=objection_arg,
+                    target=move_arg,
+                    evidence=objection,
+                    strength=objection.objection_strength,
+                )
+            )
+            if not objection_args:
+                arguments.add(objection_arg)
+                evidence[objection_arg] = objection
+            for defeater in objection_defeater_evidence(probe, objection):
+                defeater_arg = evidence_argument_id("defeater", probe.uci, defeater)
                 for target_arg in objection_args:
-                    defeats.add((defeater_arg, target_arg))
-                for index in range(extra_defeater_copies(defeater)):
-                    support_arg = f"defeater:{probe.uci}:{defeater}:{index}"
-                    arguments.add(support_arg)
-                    objection_defeater_args.append(support_arg)
-                    for target_arg in objection_args:
-                        defeats.add((support_arg, target_arg))
-        for reply_attack in probe.reply_attacks:
-            reply_arg = f"reply_attack:{probe.uci}:{reply_attack}"
-            arguments.add(reply_arg)
-            reply_evidence = to_argument_evidence(reply_attack)
-            evidence[reply_arg] = reply_evidence
-            defeats.add((reply_arg, move_arg))
+                    objection_defeater_args.extend(
+                        add_typed_attack(
+                            arguments,
+                            defeats,
+                            evidence,
+                            attacker=defeater_arg,
+                            target=target_arg,
+                            evidence=defeater,
+                            strength=defeater.defeater_strength,
+                        )
+                    )
+        for reply_evidence in probe.reply_attack_evidence:
+            reply_arg = evidence_argument_id("reply_attack", probe.uci, reply_evidence)
+            reply_attackers = add_typed_attack(
+                arguments,
+                defeats,
+                evidence,
+                attacker=reply_arg,
+                target=move_arg,
+                evidence=reply_evidence,
+                strength=reply_evidence.reply_attack_strength,
+            )
             if is_undefended_reply_capture(reply_evidence.label):
                 for support_arg in support_args:
                     defeats.add((reply_arg, support_arg))
                 for defeater_arg in objection_defeater_args:
                     defeats.add((reply_arg, defeater_arg))
-            for index in range(extra_reply_attack_copies(reply_attack)):
-                weighted_reply_arg = f"reply_attack:{probe.uci}:{reply_attack}:{index}"
-                arguments.add(weighted_reply_arg)
-                defeats.add((weighted_reply_arg, move_arg))
-            if is_defensible_reply_attack(reply_attack):
-                defense_arg = f"defense:{probe.uci}:{reply_attack}"
-                arguments.add(defense_arg)
-                defeats.add((defense_arg, reply_arg))
-                for index in range(extra_defense_copies(reply_attack)):
-                    defense_support_arg = f"defense:{probe.uci}:{reply_attack}:{index}"
-                    arguments.add(defense_support_arg)
-                    defeats.add((defense_support_arg, reply_arg))
+            if is_defensible_reply_attack(reply_evidence.label):
+                defense_arg = evidence_argument_id("defense", probe.uci, reply_evidence)
+                for target in reply_attackers:
+                    add_typed_attack(
+                        arguments,
+                        defeats,
+                        evidence,
+                        attacker=defense_arg,
+                        target=target,
+                        evidence=reply_evidence,
+                        strength=reply_evidence.defense_strength,
+                    )
 
     frozen_arguments = frozenset(arguments)
     frozen_defeats = frozenset(defeats)
@@ -638,11 +550,19 @@ def build_argument_payload(
     return {
         "arguments": sorted(graph.arguments),
         "defeats": sorted([list(pair) for pair in graph.defeats]),
-        "move_scores": [asdict(probe) for probe in probes],
+        "move_scores": [probe_payload(probe) for probe in probes],
         "move_arguments": dict(sorted(graph.move_arguments.items())),
         "grounded_extension": sorted(graph.grounded_extension),
         "argumentation_ranking": graph.ranking,
     }
+
+
+def probe_payload(probe: MoveProbe) -> dict[str, Any]:
+    payload = asdict(probe)
+    payload.pop("reason_evidence", None)
+    payload.pop("objection_evidence", None)
+    payload.pop("reply_attack_evidence", None)
+    return payload
 
 
 ARGUMENT_VALUES = frozenset(
@@ -698,20 +618,21 @@ def value_induced_framework(
     )
     return ArgumentationFramework(
         arguments=arguments,
-        defeats=preference_undercut_attacks(defeats, framework),
+        defeats=preference_undercut_attacks(defeats, framework, evidence),
     )
 
 
 def preference_undercut_attacks(
     defeats: frozenset[tuple[str, str]],
     framework: ValueBasedArgumentationFramework,
+    evidence: dict[str, ArgumentEvidence],
 ) -> frozenset[tuple[str, str]]:
     attackers_by_target: dict[str, list[str]] = {}
     for attacker, target in defeats:
         attackers_by_target.setdefault(target, []).append(attacker)
     active: set[tuple[str, str]] = set()
     for attacker, target in defeats:
-        if not attacker.startswith("defeater:"):
+        if not is_defeater_argument(attacker, evidence):
             active.add((attacker, target))
             continue
         attacker_value = framework.valuation[attacker]
@@ -724,68 +645,18 @@ def preference_undercut_attacks(
     return frozenset(active)
 
 
+def is_defeater_argument(argument: str, evidence: dict[str, ArgumentEvidence]) -> bool:
+    argument_evidence = evidence.get(argument)
+    return argument_evidence is not None and argument_evidence.defeater_kind is not None
+
+
 def argument_value(argument: str, evidence: dict[str, ArgumentEvidence]) -> str:
     if argument.startswith("move:") or argument.startswith("doubt:"):
         return "procedural"
-    if argument.startswith("reply_attack:"):
-        return reply_attack_value(argument)
-    if argument.startswith("defeater:"):
-        return defeater_value(argument)
     argument_evidence = evidence.get(argument)
     if argument_evidence is not None:
-        return evidence_value(argument_evidence)
-    if argument.startswith("support:"):
-        return support_argument_value(argument)
-    if argument.startswith("objection:") or argument.startswith("safety:"):
-        return objection_value(argument)
+        return argument_evidence.argument_value
     return "procedural"
-
-
-def evidence_value(evidence: ArgumentEvidence) -> str:
-    if evidence.world == EvidenceWorld.TERMINAL:
-        return "terminal"
-    if evidence.world == EvidenceWorld.SEARCH:
-        return "search"
-    if evidence.world in {EvidenceWorld.TACTICAL, EvidenceWorld.SMT, EvidenceWorld.MATERIAL}:
-        return "tactical"
-    if evidence.world == EvidenceWorld.POSITIONAL:
-        return "positional"
-    if evidence.world == EvidenceWorld.REPLY:
-        return reply_attack_value(evidence.label)
-    return "procedural"
-
-
-def reply_attack_value(label: str) -> str:
-    if "reply_mate:" in label or "reply_captures_moved_piece:undefended:" in label:
-        return "reply_refutation"
-    return "tactical"
-
-
-def defeater_value(argument: str) -> str:
-    if ":search_support" in argument:
-        return "search"
-    if ":advanced_flank_pawn_response" in argument:
-        return "positional"
-    if ":compensating_forcing_pressure" in argument or ":forcing_material_gain" in argument:
-        return "material_safety"
-    return "tactical"
-
-
-def support_argument_value(argument: str) -> str:
-    parts = argument.split(":")
-    if len(parts) < 4:
-        return "procedural"
-    return evidence_value(to_argument_evidence(":".join(parts[2:-1])))
-
-
-def objection_value(argument: str) -> str:
-    if "safety:" in argument:
-        return "material_safety"
-    if "search_refutes:" in argument:
-        return "search"
-    if "tactical:allows_reply" in argument:
-        return "reply_refutation"
-    return "tactical"
 
 
 def local_grounded_extension(

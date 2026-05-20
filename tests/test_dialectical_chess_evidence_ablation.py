@@ -27,7 +27,9 @@ from dialectical_chess.bench import (  # noqa: E402
     summarize_lichess_rows,
 )
 from dialectical_chess.evidence import (  # noqa: E402
+    DefeaterKind,
     EvidenceWorld,
+    ObjectionKind,
     is_argument_positional_reason,
     is_report_positional_reason,
     is_tactical_reason,
@@ -76,6 +78,29 @@ def test_evidence_comorphism_classifies_worlds_for_argumentation() -> None:
     assert not search_line.supports_argument
     assert smt_summary.world == EvidenceWorld.SMT
     assert smt_summary.counts_as_tactical
+
+
+def test_typed_objection_evidence_builds_defeat_edges() -> None:
+    probe = MoveProbe(
+        uci="f8b4",
+        san="Bb4+",
+        score=100,
+        is_checkmate=False,
+        gives_check=True,
+        is_capture=False,
+        captured_value=0,
+        promotion_value=0,
+        reasons=("search_support:alphabeta:200",),
+        objections=("opening:premature_minor_check:f8b4:undeveloped_minors:3",),
+    )
+
+    graph = build_root_argument_graph([probe])
+
+    objection_arg = "objection:f8b4:opening:premature_minor_check:f8b4:undeveloped_minors:3"
+    defeater_arg = "defeater:f8b4:defeater:search_support"
+    assert graph.evidence[objection_arg].objection_kind == ObjectionKind.OPENING_PREMATURE_MINOR_CHECK
+    assert graph.evidence[defeater_arg].defeater_kind == DefeaterKind.SEARCH_SUPPORT
+    assert (defeater_arg, objection_arg) in graph.defeats
 
 
 def test_reporting_positional_comorphism_excludes_piece_safety() -> None:
