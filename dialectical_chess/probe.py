@@ -847,7 +847,9 @@ def forced_reply_mate_scan_candidates(
     for probe in sorted(
         eligible,
         key=lambda candidate: (
-            forced_reply_mate_risk_sort_key(candidate.objections),
+            forced_reply_mate_risk_sort_key(candidate.objections)
+            if search_depth == 0
+            else 1,
             search_refutation_sort_key(candidate.objections),
             -candidate.score,
             candidate.uci,
