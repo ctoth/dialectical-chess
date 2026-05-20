@@ -147,13 +147,9 @@ def selected_has_large_search_refutation(selected: MoveProbe) -> bool:
 
 
 def uses_selected_reply_mate_refutation(settings: EngineSettings) -> bool:
-    return (
-        settings.reply_mate_scan
-        and (
-            settings.search_depth == 1
-            or (settings.search_depth == 0 and not settings.positional_reasons)
-        )
-    )
+    if settings.search_depth == 1:
+        return True
+    return settings.reply_mate_scan and settings.search_depth == 0 and not settings.positional_reasons
 
 
 def selected_reply_mate_refutation(

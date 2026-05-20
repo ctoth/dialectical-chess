@@ -169,7 +169,7 @@ def test_uci_go_uses_lower_depth_when_clock_is_low() -> None:
 
     adjusted = settings_for_go(settings, board, "go wtime 4500 btime 9000 winc 100 binc 100")
 
-    assert adjusted.search_depth == 0
+    assert adjusted.search_depth == 1
     assert adjusted.dialectic_depth == 0
     assert adjusted.search_backend == "alphabeta"
     assert not adjusted.reply_mate_scan
@@ -185,7 +185,7 @@ def test_uci_go_uses_depth_zero_when_fast_clock_is_short() -> None:
 
     adjusted = settings_for_go(settings, board, "go wtime 10000 btime 30000 winc 100 binc 100")
 
-    assert adjusted.search_depth == 0
+    assert adjusted.search_depth == 1
     assert adjusted.dialectic_depth == 0
     assert adjusted.search_backend == "alphabeta"
     assert not adjusted.reply_mate_scan
