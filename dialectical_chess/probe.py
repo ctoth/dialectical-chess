@@ -36,6 +36,7 @@ class ProbeSettings:
     reply_analysis: ReplyAnalysisSettings = field(default_factory=ReplyAnalysisSettings)
     smt: SmtSettings = field(default_factory=SmtSettings)
     positional_reasons: bool = True
+    reply_mate_scan: bool = True
 
 
 def probe_moves(
@@ -47,6 +48,7 @@ def probe_moves(
     smt_mate: bool = True,
     smt_fork: bool = True,
     positional_reasons: bool = True,
+    reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
 ) -> list[MoveProbe]:
     settings = ProbeSettings(
@@ -55,6 +57,7 @@ def probe_moves(
         reply_analysis=reply_analysis or ReplyAnalysisSettings(),
         smt=SmtSettings(mate_in_one=smt_mate, fork=smt_fork),
         positional_reasons=positional_reasons,
+        reply_mate_scan=reply_mate_scan,
     )
     return probe_moves_with_settings(board, settings)
 
@@ -145,7 +148,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
             objections.extend(flank_objections)
             score += flank_score
-            if should_scan_reply_mate(
+            if settings.reply_mate_scan and should_scan_reply_mate(
                 settings.search.depth,
                 board,
                 move,
@@ -190,6 +193,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             if (
                 settings.search.depth == 1
                 and search_result.score <= -700
+                and settings.reply_mate_scan
                 and not has_reply_mate_in_one_objection(objections)
             ):
                 reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
@@ -223,12 +227,13 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 smt_witnesses=tuple(smt_witnesses),
             )
         )
-    probes = scan_forced_reply_mates_for_candidate_moves(
-        board,
-        legal_moves,
-        probes,
-        search_depth=settings.search.depth,
-    )
+    if settings.reply_mate_scan:
+        probes = scan_forced_reply_mates_for_candidate_moves(
+            board,
+            legal_moves,
+            probes,
+            search_depth=settings.search.depth,
+        )
     return sorted(probes, key=lambda probe: (-probe.score, probe.uci))
 
 

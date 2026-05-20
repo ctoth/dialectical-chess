@@ -25,6 +25,7 @@ class EngineSettings:
     smt_fork: bool = True
     selector_mode: str = "argument"
     positional_reasons: bool = True
+    reply_mate_scan: bool = True
     reply_analysis: ReplyAnalysisSettings = ReplyAnalysisSettings()
 
     def __post_init__(self) -> None:
@@ -65,6 +66,7 @@ class DialecticalChessEngine:
                 smt_mate=self.settings.smt_mate,
                 smt_fork=self.settings.smt_fork,
                 positional_reasons=self.settings.positional_reasons,
+                reply_mate_scan=self.settings.reply_mate_scan,
                 reply_analysis=self.settings.reply_analysis,
             )
         )

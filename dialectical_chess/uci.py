@@ -25,6 +25,7 @@ def run_uci(
     smt_fork: bool = True,
     selector_mode: str = "argument",
     positional_reasons: bool = True,
+    reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
 ) -> int:
     settings = EngineSettings(
@@ -35,6 +36,7 @@ def run_uci(
         smt_fork=smt_fork,
         selector_mode=selector_mode,
         positional_reasons=positional_reasons,
+        reply_mate_scan=reply_mate_scan,
         reply_analysis=reply_analysis or ReplyAnalysisSettings(),
     )
     board = owned_board_from_fen(START_FEN)
@@ -118,6 +120,7 @@ def choose_uci_move(
     smt_fork: bool = True,
     selector_mode: str = "argument",
     positional_reasons: bool = True,
+    reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
     output_stream: TextIO | None = None,
 ) -> str:
@@ -129,6 +132,7 @@ def choose_uci_move(
         smt_fork=smt_fork,
         selector_mode=selector_mode,
         positional_reasons=positional_reasons,
+        reply_mate_scan=reply_mate_scan,
         reply_analysis=reply_analysis or ReplyAnalysisSettings(),
     )
     try:
@@ -142,6 +146,7 @@ def choose_uci_move(
     if output_stream is not None:
         _uci_write(output_stream, f"info string selector_mode={settings.selector_mode}")
         _uci_write(output_stream, f"info string positional_reasons={settings.positional_reasons}")
+        _uci_write(output_stream, f"info string reply_mate_scan={settings.reply_mate_scan}")
         _uci_write(output_stream, f"info string reply_analysis={settings.reply_analysis}")
         if decision.selected.optimizer_trace:
             _uci_write(
@@ -159,6 +164,16 @@ def settings_for_go(settings: EngineSettings, board, command: str) -> EngineSett
     if remaining is None:
         return settings
     search_depth = settings.search_depth
+    if remaining <= 2_500:
+        search_depth = min(search_depth, 0)
+        return replace(
+            settings,
+            search_depth=search_depth,
+            smt_mate=False,
+            smt_fork=False,
+            positional_reasons=False,
+            reply_mate_scan=False,
+        )
     if remaining <= 12_000:
         search_depth = min(search_depth, 0)
     elif remaining <= 20_000:

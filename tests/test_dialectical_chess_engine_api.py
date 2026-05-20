@@ -42,6 +42,7 @@ def test_engine_settings_are_plain_serializable(
         "smt_fork": smt_fork,
         "selector_mode": "argument",
         "positional_reasons": True,
+        "reply_mate_scan": True,
         "reply_analysis": {
             "max_replies": 128,
             "max_defense_nodes": 5000,
@@ -169,6 +170,7 @@ def test_uci_go_uses_lower_depth_when_clock_is_low() -> None:
 
     assert adjusted.search_depth == 0
     assert adjusted.search_backend == "alphabeta"
+    assert adjusted.reply_mate_scan
 
 
 def test_uci_go_uses_depth_zero_when_fast_clock_is_short() -> None:
@@ -183,6 +185,25 @@ def test_uci_go_uses_depth_zero_when_fast_clock_is_short() -> None:
 
     assert adjusted.search_depth == 0
     assert adjusted.search_backend == "alphabeta"
+    assert adjusted.reply_mate_scan
+
+
+def test_uci_go_uses_panic_settings_when_clock_is_critical() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 2400 btime 30000 winc 100 binc 100")
+
+    assert adjusted.search_depth == 0
+    assert adjusted.search_backend == "alphabeta"
+    assert not adjusted.smt_mate
+    assert not adjusted.smt_fork
+    assert not adjusted.positional_reasons
+    assert not adjusted.reply_mate_scan
 
 
 def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
