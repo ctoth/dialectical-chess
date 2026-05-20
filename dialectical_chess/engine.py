@@ -81,11 +81,12 @@ class DialecticalChessEngine:
         if uses_selected_reply_mate_refutation(self.settings):
             probes, graph, selected = selected_reply_mate_refutation_fixpoint(
                 board,
-                probes,
-                graph,
-                selected,
-                selector_mode=self.settings.selector_mode,
-            )
+            probes,
+            graph,
+            selected,
+            allow_mate_four=self.settings.reply_mate_scan,
+            selector_mode=self.settings.selector_mode,
+        )
         decision = EngineDecision(
             move_uci="0000" if selected is None else selected.uci,
             selected=selected,
@@ -102,6 +103,7 @@ def selected_reply_mate_refutation_fixpoint(
     graph: RootArgumentGraph,
     selected: MoveProbe | None,
     *,
+    allow_mate_four: bool,
     selector_mode: str,
 ) -> tuple[list[MoveProbe], RootArgumentGraph, MoveProbe | None]:
     move_by_uci = {move.uci(): move for move in board.legal_moves()}
@@ -111,7 +113,7 @@ def selected_reply_mate_refutation_fixpoint(
             board,
             move_by_uci,
             selected,
-            mate_depths=selected_reply_mate_depths(selected),
+            mate_depths=selected_reply_mate_depths(selected, allow_mate_four=allow_mate_four),
         )
         if objection is None:
             break
@@ -132,8 +134,10 @@ def selected_reply_mate_refutation_fixpoint(
 
 def selected_reply_mate_depths(
     selected: MoveProbe,
+    *,
+    allow_mate_four: bool,
 ) -> tuple[int, ...]:
-    if selected_has_large_search_refutation(selected):
+    if allow_mate_four and selected_has_large_search_refutation(selected):
         return (2, 3, 4)
     return (2, 3)
 

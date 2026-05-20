@@ -222,6 +222,8 @@ def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
 
     assert adjusted.search_depth == 1
     assert adjusted.search_backend == "alphabeta"
+    assert adjusted.dialectic_depth == 0
+    assert not adjusted.reply_mate_scan
 
 
 def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
