@@ -191,7 +191,12 @@ def settings_for_go(settings: EngineSettings, board, command: str) -> EngineSett
             reply_mate_scan=False,
         )
     if remaining <= 12_000:
-        search_depth = min(search_depth, 0)
+        return replace(
+            settings,
+            dialectic_depth=0,
+            search_depth=min(search_depth, 0),
+            reply_mate_scan=False,
+        )
     elif remaining <= 20_000:
         search_depth = min(search_depth, 1)
     if search_depth == settings.search_depth:
