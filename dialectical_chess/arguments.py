@@ -318,7 +318,7 @@ def is_tactical_reason(reason: str) -> bool:
     if reason.startswith("smt:fork:"):
         parts = reason.split(":")
         return len(parts) == 4 and parts[2].isdigit() and parts[3].lstrip("-").isdigit()
-    if reason.startswith("search_line:"):
+    if reason.startswith("search_line:") or reason.startswith("material:exchange_nonnegative:"):
         return False
     return reason.startswith(TACTICAL_REASON_PREFIXES)
 
