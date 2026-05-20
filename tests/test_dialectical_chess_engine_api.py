@@ -171,6 +171,20 @@ def test_uci_go_uses_lower_depth_when_clock_is_low() -> None:
     assert adjusted.search_backend == "alphabeta"
 
 
+def test_uci_go_uses_depth_zero_when_fast_clock_is_short() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import settings_for_go
+
+    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+
+    adjusted = settings_for_go(settings, board, "go wtime 10000 btime 30000 winc 100 binc 100")
+
+    assert adjusted.search_depth == 0
+    assert adjusted.search_backend == "alphabeta"
+
+
 def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
