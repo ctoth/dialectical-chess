@@ -648,6 +648,8 @@ def should_scan_reply_forced_mate(
         return False
     if piece.lower() == "k":
         return True
+    if has_large_search_refutation(objections):
+        return True
     has_threat_reason = any(
         reason.startswith("tactical:threat:")
         for reason in reasons
@@ -660,6 +662,16 @@ def should_scan_reply_forced_mate(
         objection.startswith("safety:moved_piece_en_pris:")
         for objection in objections
     )
+
+
+def has_large_search_refutation(objections: list[str]) -> bool:
+    for objection in objections:
+        if not objection.startswith("search_refutes:"):
+            continue
+        parts = objection.split(":")
+        if len(parts) == 3 and int(parts[2]) <= -1_000:
+            return True
+    return False
 
 
 def ensure_owned_board(board: Any) -> OwnedBoard:
