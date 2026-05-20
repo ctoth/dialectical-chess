@@ -579,7 +579,7 @@ def scan_forced_reply_mates_for_candidate_moves(
     legal_move_count = len(legal_moves)
     scan_depth_one_mate_three = (
         search_depth == 1
-        and legal_move_count <= 4
+        and legal_move_count <= 2
         and board.in_check(board.turn)
     )
     updated: dict[str, MoveProbe] = {}
@@ -740,7 +740,7 @@ def should_scan_reply_forced_mate(
             return True
         if (
             legal_move_count is not None
-            and legal_move_count <= 4
+            and legal_move_count <= 2
             and board.in_check(board.turn)
             and has_search_refutation_at_most(objections, -700)
         ):
