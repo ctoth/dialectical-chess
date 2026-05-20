@@ -16,6 +16,7 @@ from dialectical_chess.loss_mining import (  # noqa: E402
     reviewed_epd_lines,
     safe_legal_moves,
 )
+from dialectical_chess.pgn_diagnostics import pgn_positions  # noqa: E402
 import dialectical_chess.matches as matches  # noqa: E402
 from dialectical_chess.matches import PROJECT_ROOT, build_fastchess_command, prepare_match_outputs  # noqa: E402
 
@@ -61,6 +62,42 @@ def test_prepare_match_outputs_creates_relative_pgn_parent(
     prepare_match_outputs(args)
 
     assert (tmp_path / "scratch").is_dir()
+
+
+def test_pgn_diagnostics_filters_engine_positions() -> None:
+    pgn = """
+[Event "diagnostic"]
+[White "StockfishElo2000"]
+[Black "Dialectical"]
+[Result "1-0"]
+
+1. e4 e6 2. Qh5 Qh4 1-0
+"""
+
+    payload = pgn_positions(pgn, engine_name="Dialectical", engine_only=True)
+
+    assert payload == {
+        "positions": [
+            {
+                "game_index": 1,
+                "ply": 2,
+                "mover": "b",
+                "engine_to_move": True,
+                "fen_before": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+                "move_uci": "e7e6",
+                "comment": "",
+            },
+            {
+                "game_index": 1,
+                "ply": 4,
+                "mover": "b",
+                "engine_to_move": True,
+                "fen_before": "rnbqkbnr/pppp1ppp/4p3/7Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2",
+                "move_uci": "d8h4",
+                "comment": "",
+            },
+        ]
+    }
 
 
 def test_mines_first_engine_move_that_allows_immediate_mate() -> None:
