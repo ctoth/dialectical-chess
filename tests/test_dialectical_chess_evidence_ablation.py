@@ -26,6 +26,13 @@ from dialectical_chess.bench import (  # noqa: E402
     settings as bench_settings,
     summarize_lichess_rows,
 )
+from dialectical_chess.evidence import (  # noqa: E402
+    EvidenceWorld,
+    is_argument_positional_reason,
+    is_report_positional_reason,
+    is_tactical_reason,
+    to_argument_evidence,
+)
 from dialectical_chess.probe import owned_board_from_fen, probe_moves  # noqa: E402
 from dialectical_chess.engine import EngineSettings  # noqa: E402
 from dialectical_chess.engine import DialecticalChessEngine  # noqa: E402
@@ -55,6 +62,28 @@ def quiet_probe(uci: str, score: int, reasons: tuple[str, ...] = ()) -> MoveProb
         reasons=reasons,
         objections=() if reasons else ("objection:no_immediate_tactical_warrant",),
     )
+
+
+def test_evidence_comorphism_classifies_worlds_for_argumentation() -> None:
+    positional = to_argument_evidence("piece_safety:defended:e7e8:900")
+    search_line = to_argument_evidence("search_line:e2e4-e7e5")
+    smt_summary = to_argument_evidence("smt:fork:3:1330")
+
+    assert positional.world == EvidenceWorld.POSITIONAL
+    assert positional.counts_as_positional
+    assert not positional.counts_as_tactical
+    assert search_line.world == EvidenceWorld.SEARCH
+    assert not search_line.supports_argument
+    assert smt_summary.world == EvidenceWorld.SMT
+    assert smt_summary.counts_as_tactical
+
+
+def test_reporting_positional_comorphism_excludes_piece_safety() -> None:
+    reason = "piece_safety:defended:e7e8:900"
+
+    assert is_argument_positional_reason(reason)
+    assert not is_report_positional_reason(reason)
+    assert not is_tactical_reason("material:exchange_nonnegative:e4d5")
 
 
 def test_score_selector_ignores_argument_support() -> None:

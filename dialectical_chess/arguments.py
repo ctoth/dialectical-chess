@@ -7,26 +7,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from dialectical_chess.evidence import (
+    is_argument_positional_reason as is_positional_reason,
+)
+from dialectical_chess.evidence import is_tactical_reason, tactical_threat_value
+
 SELECTOR_MODES = frozenset({"argument", "score", "grounded", "support", "categoriser", "optimizer"})
-POSITIONAL_REASON_PREFIXES = (
-    "center_control:",
-    "development:",
-    "file_control:",
-    "king_safety:",
-    "outpost:",
-    "pawn_structure:",
-    "piece_activity:",
-    "piece_safety:",
-)
-TACTICAL_REASON_PREFIXES = (
-    "terminal:",
-    "tactical:",
-    "material:",
-    "procedural:",
-    "smt:",
-    "search:",
-    "search_support:",
-)
 POSITIONAL_SCORE_BONUS = 25
 LARGE_SEARCH_REFUTATION_THRESHOLD = -500
 COMPENSATING_TACTICAL_THREAT_THRESHOLD = 700
@@ -406,32 +392,6 @@ def has_forcing_material_gain(probe: MoveProbe) -> bool:
 
 def has_search_support(probe: MoveProbe) -> bool:
     return any(reason.startswith("search_support:") for reason in probe.reasons)
-
-
-def tactical_threat_value(reason: str) -> int:
-    prefix = "tactical:threat:targets:"
-    if not reason.startswith(prefix):
-        return 0
-    parts = reason.split(":")
-    if len(parts) != 6 or parts[4] != "value":
-        return 0
-    try:
-        return int(parts[5])
-    except ValueError:
-        return 0
-
-
-def is_positional_reason(reason: str) -> bool:
-    return reason.startswith(POSITIONAL_REASON_PREFIXES)
-
-
-def is_tactical_reason(reason: str) -> bool:
-    if reason.startswith("smt:fork:"):
-        parts = reason.split(":")
-        return len(parts) == 4 and parts[2].isdigit() and parts[3].lstrip("-").isdigit()
-    if reason.startswith("search_line:") or reason.startswith("material:exchange_nonnegative:"):
-        return False
-    return reason.startswith(TACTICAL_REASON_PREFIXES)
 
 
 def _accepted_reason_count(
