@@ -265,7 +265,22 @@ def severe_objection_count(probe: MoveProbe) -> int:
         1
         for objection in probe.objections
         if objection.startswith("safety:queen_blunder:")
+        or is_forced_mate_refutation(objection)
     )
+
+
+def is_forced_mate_refutation(objection: str) -> bool:
+    prefix = "search_refutes:"
+    if not objection.startswith(prefix):
+        return False
+    parts = objection.split(":")
+    if len(parts) != 3:
+        return False
+    try:
+        score = int(parts[2])
+    except ValueError:
+        return False
+    return score <= -100_000
 
 
 def is_positional_reason(reason: str) -> bool:
