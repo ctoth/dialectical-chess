@@ -236,6 +236,23 @@ def test_uci_go_disables_reply_work_when_clock_is_critical() -> None:
     assert not adjusted.reply_mate_scan
 
 
+def test_critical_clock_profile_rejects_selected_forced_mate() -> None:
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import choose_uci_move, settings_for_go
+
+    board = owned_board_from_fen("2b2k2/p2n1prp/1rNp2p1/8/4P2P/3B1PP1/P1P1K1q1/8 w - - 1 26")
+    settings = settings_for_go(
+        EngineSettings(search_depth=2, search_backend="alphabeta"),
+        board,
+        "go wtime 2400 btime 30000 winc 100 binc 100",
+    )
+
+    assert settings.search_depth == 0
+    assert not settings.reply_mate_scan
+    assert choose_uci_move(board, settings=settings) == "e2e3"
+
+
 def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
