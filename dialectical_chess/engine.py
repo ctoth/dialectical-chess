@@ -6,12 +6,14 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from dialectical_chess.arguments import (
+    LARGE_SEARCH_REFUTATION_THRESHOLD,
     MoveProbe,
     RootArgumentGraph,
     SELECTOR_MODES,
     build_root_argument_graph,
     choose_move,
 )
+from dialectical_chess.evidence import to_argument_evidence
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.probe import ensure_owned_board, probe_moves
 from dialectical_chess.search import ReplyAnalysisSettings
@@ -103,10 +105,14 @@ def selected_reply_mate_refutation_fixpoint(
     selector_mode: str,
 ) -> tuple[list[MoveProbe], RootArgumentGraph, MoveProbe | None]:
     move_by_uci = {move.uci(): move for move in board.legal_moves()}
-    mate_depths = selected_reply_mate_depths(selector_mode=selector_mode, probes=probes)
     refuted: set[str] = set()
     while selected is not None and selected.uci not in refuted:
-        objection = selected_reply_mate_refutation(board, move_by_uci, selected, mate_depths=mate_depths)
+        objection = selected_reply_mate_refutation(
+            board,
+            move_by_uci,
+            selected,
+            mate_depths=selected_reply_mate_depths(selected),
+        )
         if objection is None:
             break
         refuted.add(selected.uci)
@@ -125,13 +131,19 @@ def selected_reply_mate_refutation_fixpoint(
 
 
 def selected_reply_mate_depths(
-    *,
-    selector_mode: str,
-    probes: list[MoveProbe],
+    selected: MoveProbe,
 ) -> tuple[int, ...]:
-    if selector_mode == "argument" and any(probe.search_score is not None for probe in probes):
+    if selected_has_large_search_refutation(selected):
         return (2, 3, 4)
     return (2, 3)
+
+
+def selected_has_large_search_refutation(selected: MoveProbe) -> bool:
+    for objection in selected.objections:
+        score = to_argument_evidence(objection).search_refutation_score
+        if score is not None and score <= LARGE_SEARCH_REFUTATION_THRESHOLD:
+            return True
+    return False
 
 
 def uses_selected_reply_mate_refutation(settings: EngineSettings) -> bool:
