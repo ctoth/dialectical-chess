@@ -117,6 +117,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             )
             objections.extend(opening_objections)
             score += opening_score
+            king_objections, king_score = opening_king_safety_objections(board, move)
+            objections.extend(king_objections)
+            score += king_score
         if settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
@@ -289,6 +292,21 @@ def undeveloped_minor_count(board: OwnedBoard, color: str) -> int:
         for square, piece in zip(home_squares, expected, strict=True)
         if board.piece_at(square) == piece
     )
+
+
+def opening_king_safety_objections(
+    board: OwnedBoard,
+    move: Any,
+) -> tuple[tuple[str, ...], int]:
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.lower() != "k":
+        return (), 0
+    if move.kind == "castle" or board.fullmove_number > 12:
+        return (), 0
+    color = piece_color(piece)
+    if board.in_check(color):
+        return (), 0
+    return ((f"opening:king_walk:{move.uci()}",), -400)
 
 
 def ensure_owned_board(board: Any) -> OwnedBoard:

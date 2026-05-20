@@ -82,7 +82,7 @@ def choose_move(
 
         return choose_optimized_move(probes, graph)
     return sorted(
-        grounded_candidates(probes, graph),
+        probes,
         key=lambda probe: selection_key(probe, graph),
     )[0]
 
