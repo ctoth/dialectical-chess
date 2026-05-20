@@ -612,11 +612,17 @@ def queen_flank_invasion_objections(
         if queen is None or queen.lower() != "q" or piece_color(queen) != opponent:
             continue
         for target in vulnerable:
-            captured = child.piece_at(target)
+            previous = board.piece_at(target)
+            current = child.piece_at(target)
             if (
-                captured is not None
-                and captured.lower() == "p"
+                previous is not None
+                and previous.lower() == "p"
+                and piece_color(previous) == color
                 and moved_piece_attacks_square(child, queen_square, target, queen)
+                and (
+                    current is not None
+                    or move.from_square == target
+                )
             ):
                 labels.append(f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(target)}")
     if not labels:

@@ -1456,6 +1456,48 @@ def test_queen_flank_invasion_gets_king_safety_objection() -> None:
     assert probes["g8f6"].score < probes["g7g6"].score
 
 
+def test_queen_flank_invasion_survives_vacated_flank_pawn() -> None:
+    board = owned_board_from_fen("3r1kr1/1p3p1p/p3p3/P1p1q3/Q5PK/1P6/2P4P/7R w - - 3 29")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            dialectic_depth=2,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=True,
+        )
+    }
+
+    assert "king_safety:queen_flank_invasion:h2h3:h2" in probes["h2h3"].objections
+
+    decision = DialecticalChessEngine(
+        EngineSettings(
+            selector_mode="argument",
+            dialectic_depth=2,
+            search_depth=0,
+            search_backend="alphabeta",
+            smt_mate=False,
+            smt_fork=True,
+        )
+    ).choose_move(board)
+
+    assert decision.move_uci in {
+        "h4h3",
+        "a4e8",
+        "a4d7",
+        "a4c6",
+        "a4b5",
+        "a4e4",
+        "a4c4",
+        "a4b4",
+        "a4a3",
+        "a4a1",
+        "b3b4",
+    }
+
+
 def test_argument_selector_rejects_queen_flank_invasion() -> None:
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
 
