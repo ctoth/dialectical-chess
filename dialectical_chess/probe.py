@@ -271,6 +271,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 search_score=None if search_result is None else search_result.score,
                 search_line=() if search_result is None else search_result.line,
                 smt_witnesses=tuple(smt_witnesses),
+                post_fen=child.fen(),
             )
         )
     if settings.reply_mate_scan:

@@ -24,6 +24,7 @@ class MoveProbe:
     search_score: int | None = None
     search_line: tuple[str, ...] = ()
     smt_witnesses: tuple[str, ...] = ()
+    post_fen: str | None = None
     reason_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)
     objection_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)
     reply_attack_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)
