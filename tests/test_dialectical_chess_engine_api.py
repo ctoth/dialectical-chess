@@ -185,7 +185,9 @@ def test_uci_go_keeps_depth_when_fast_clock_is_playable() -> None:
 
     adjusted = settings_for_go(settings, board, "go wtime 10000 btime 30000 winc 100 binc 100")
 
-    assert adjusted is settings
+    assert adjusted.search_depth == 2
+    assert adjusted.dialectic_depth == 1
+    assert not adjusted.reply_mate_scan
 
 
 def test_uci_go_keeps_depth_at_twenty_five_seconds() -> None:
@@ -198,7 +200,9 @@ def test_uci_go_keeps_depth_at_twenty_five_seconds() -> None:
 
     adjusted = settings_for_go(settings, board, "go wtime 25000 btime 30000 winc 200 binc 200")
 
-    assert adjusted is settings
+    assert adjusted.search_depth == 2
+    assert adjusted.dialectic_depth == 1
+    assert not adjusted.reply_mate_scan
 
 
 def test_uci_go_uses_depth_one_when_clock_is_short() -> None:
@@ -285,7 +289,9 @@ def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
 
     adjusted = settings_for_go(settings, board, "go wtime 15000 btime 30000 winc 200 binc 200")
 
-    assert adjusted is settings
+    assert adjusted.search_depth == 2
+    assert adjusted.dialectic_depth == 1
+    assert not adjusted.reply_mate_scan
 
 
 def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
@@ -296,6 +302,6 @@ def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
     board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
     settings = EngineSettings(search_depth=2, search_backend="alphabeta")
 
-    adjusted = settings_for_go(settings, board, "go wtime 28000 btime 30000 winc 200 binc 200")
+    adjusted = settings_for_go(settings, board, "go wtime 90000 btime 90000 winc 200 binc 200")
 
     assert adjusted is settings
