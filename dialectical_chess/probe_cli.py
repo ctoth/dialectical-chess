@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{probe.uci:5} {probe.san:8} score={probe.score:6} {', '.join(probe.reasons)}")
 
     if args.emit_af:
-        af_payload = build_argument_payload(list(analysis.probes), analysis.graph)
+        af_payload = build_argument_payload(list(analysis.probes))
         args.emit_af.parent.mkdir(parents=True, exist_ok=True)
         args.emit_af.write_text(json.dumps(af_payload, indent=2), encoding="utf-8")
 

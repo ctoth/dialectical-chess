@@ -3,8 +3,8 @@
 `dialectical-chess` is a UCI-capable chess engine experiment built around
 explicit dialectical move arguments. It uses an owned chess move-generation
 substrate, shallow tactical/search witnesses, optional Z3-backed tactical
-checks, and the `formal-argumentation` package for argument semantics and
-optimization.
+checks, `doxa` for opinion-valued gradual argument semantics, and the
+`formal-argumentation` package for Dung skeptical filtering.
 
 The engine is experimental. It is meant for research, diagnostics, and small
 benchmarks rather than competitive chess strength.
@@ -15,8 +15,8 @@ benchmarks rather than competitive chess strength.
 uv sync
 ```
 
-The package pins `formal-argumentation` to a GitHub commit SHA so a clean
-checkout can resolve the same argumentation library revision.
+The package pins `doxa` and `formal-argumentation` to GitHub commit SHAs so a
+clean checkout can resolve the same argumentation library revisions.
 
 ## Commands
 

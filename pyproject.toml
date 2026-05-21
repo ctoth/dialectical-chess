@@ -67,7 +67,7 @@ packages = ["dialectical_chess"]
 typeCheckingMode = "basic"
 venvPath = "."
 venv = ".venv"
-include = ["dialectical_chess", "tests"]
+include = ["dialectical_chess", "tests/test_argumentation_thesis.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

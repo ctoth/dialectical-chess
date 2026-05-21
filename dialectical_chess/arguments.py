@@ -48,6 +48,8 @@ class MoveProbe:
 
 
 def choose_move(probes: list[MoveProbe]) -> MoveProbe:
+    from dialectical_chess.decide import choose_move_argumentation
+
     decision = choose_move_argumentation(probes)
     return decision.selected
 
