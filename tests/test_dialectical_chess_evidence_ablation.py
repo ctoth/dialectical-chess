@@ -160,6 +160,13 @@ def test_argument_selector_rejects_hanging_checking_minor_move() -> None:
 
 
 def test_argument_selector_requires_strong_compensation_for_hanging_minor() -> None:
+    # P2.8b FLAGGED REGRESSION -- this test fails on purpose and is NOT
+    # re-baselined. The opinion-valued engine plays c3d5 instead of e4e5.
+    # Triage (reports/phase2-move-triage.md, reports/argdriven-phase2-8b.md)
+    # found c3d5 is WORSE: the engine's own depth-2 alphabeta ranks c3d5 5th of
+    # 38 at -420 cp, vs e4e5 1st at -200 cp; c3d5 drops the d4 knight (static
+    # exchange loss 320 cp) while e4e5 loses only a pawn. This is a genuine
+    # move-quality regression for investigation, deliberately left failing.
     board = owned_board_from_fen("rn2kbnr/1bpp1pp1/pp2pq2/7p/2BNP2p/2N5/PPPP1PPP/R1BQ1RK1 w kq - 1 8")
 
     decision = DialecticalChessEngine(
@@ -353,6 +360,15 @@ def test_argument_selector_rejects_premature_minor_check() -> None:
 
 
 def test_argument_selector_rejects_search_proven_forced_mate() -> None:
+    # P2.8b FLAGGED REGRESSION -- fails on purpose, NOT re-baselined. The
+    # opinion-valued engine plays f2f3 instead of f2f1. Triage
+    # (reports/phase2-move-triage.md) found this position is fully lost: all
+    # three legal moves walk into a proven forced mate. f2f3 lets White mate
+    # in 1, f2f1 lets White mate in 2 -- f2f3 is the FASTER loss. The skeptical
+    # filter correctly excludes every move (empty_survivors); the decider then
+    # ranks by expectation() and picks the quicker mate. Picking the slowest
+    # loss in a lost position is the desired behaviour, so this is left failing
+    # and flagged for investigation (a least-resistance / DTM tie-break).
     board = owned_board_from_fen("4k2r/1p2bppp/p4n2/6N1/P3rn2/4Q3/1P1P1K1q/R1B5 w k - 0 24")
 
     decision = DialecticalChessEngine(
@@ -617,6 +633,14 @@ def test_low_search_depth_checks_reply_mate_for_minor_retreats() -> None:
 
 
 def test_low_search_depth_checks_reply_mate_for_material_captures() -> None:
+    # P2.8b FLAGGED REGRESSION -- fails on purpose, NOT re-baselined. The
+    # opinion-valued engine plays a1f1. Triage (reports/phase2-move-triage.md)
+    # found this position is fully lost: all 39 legal moves walk into a proven
+    # forced mate. a1f1 captures a bishop but allows White to mate in 1 -- it is
+    # the FASTEST loss in the position. This test exists precisely to assert the
+    # engine does not grab material into the quickest mate. The engine now does;
+    # left failing and flagged for investigation (least-resistance tie-break in
+    # an empty-survivors position).
     board = owned_board_from_fen("1k1r3r/1ppq1p2/p4np1/8/PB1b1P2/1PN2BK1/1QPP3P/R4b2 w - - 0 22")
 
     decision = DialecticalChessEngine(
@@ -1158,6 +1182,13 @@ def test_low_search_depth_checks_forced_reply_mate_for_mildly_refuted_threats() 
 
     assert "tactical:allows_reply_forced_mate_in_2:g8e7" in probes["g8e7"].objections
 
+    # P2.8b FLAGGED REGRESSION -- the move assertion below fails on purpose and
+    # is NOT re-baselined. The opinion-valued engine plays g8e7 instead of a6e2.
+    # Triage (reports/phase2-move-triage.md) found this position is fully lost:
+    # both legal moves walk into a proven forced mate. g8e7 lets White mate in
+    # 2, a6e2 lets White mate in 3 -- g8e7 is the FASTER loss. As with the
+    # other empty-survivors positions, the engine should prefer the slowest
+    # loss; left failing and flagged for investigation.
     decision = DialecticalChessEngine(
         EngineSettings(
             dialectic_depth=0,
@@ -1195,6 +1226,13 @@ def test_castled_flank_pawn_push_gets_king_shield_objection() -> None:
 
 
 def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
+    # P2.8b FLAGGED REGRESSION -- fails on purpose, NOT re-baselined. The
+    # opinion-valued engine plays c5f2 instead of g7g6. Triage
+    # (reports/phase2-move-triage.md) found c5f2 is a BLUNDER: Bxf2+ sacrifices
+    # a bishop for a single pawn (static exchange loss 330 cp on f2, no
+    # compensation). The engine's own depth-2 alphabeta ranks c5f2 21st of 37
+    # moves at -230 cp, vs g7g6 1st at -100 cp. Genuine move-quality
+    # regression, deliberately left failing for investigation.
     board = owned_board_from_fen("r1bqk1nr/1ppp1ppp/2n5/p1bN4/4P1Q1/8/PPP2PPP/R1B1KBNR b KQkq - 1 6")
 
     decision = DialecticalChessEngine(
@@ -1266,7 +1304,14 @@ def test_argument_selector_rejects_queen_flank_invasion() -> None:
         )
     ).choose_move(board)
 
-    assert decision.move_uci != "g8f6"
+    # P2.8b golden-master re-baseline (equal/sound-but-different): the
+    # opinion-valued engine now plays g8f6. Triage (reports/phase2-move-triage.md)
+    # confirms g8f6 is sound here -- the engine's own depth-2 alphabeta ranks
+    # g8f6 3rd of 27 moves, tied with the best moves at -10 cp; g8f6 develops a
+    # knight and attacks the invading queen, and walks into no forced mate. The
+    # king_safety:queen_flank_invasion objection is a soft positional objection,
+    # not a sound refutation, so it does not (and should not) exclude the move.
+    assert decision.move_uci == "g8f6"
 
 
 @pytest.mark.parametrize(
@@ -1608,7 +1653,13 @@ def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:
         )
     ).choose_move(board)
 
-    assert decision.move_uci == "e4g2"
+    # P2.8b golden-master re-baseline (better): the opinion-valued engine now
+    # plays e4e3 instead of e4g2. Triage (reports/phase2-move-triage.md)
+    # confirms e4e3 is strictly better -- e4g2 (Qxg2+) walks into a proven
+    # forced mate in 4 for White (has_forced_mate, depth 4), while e4e3 (Qxe3)
+    # captures a bishop and walks into no forced mate. The old expectation was a
+    # genuine blunder; the new move is the sound choice.
+    assert decision.move_uci == "e4e3"
 
 
 def test_forcing_capture_compensates_moved_piece_en_pris_objection() -> None:
@@ -2065,7 +2116,18 @@ def test_selected_shallow_search_fork_is_reranked_when_mate_in_four_refutes_it()
     ).analyze(board)
     probes = {probe.uci: probe for probe in analysis.probes}
 
-    assert "tactical:allows_reply_forced_mate_in_4:g3d6" in probes["g3d6"].objections
+    # P2.8b probe-content re-baseline: g3d6 is still correctly refuted, but by
+    # the alphabeta search refutation rather than the reply-mate-in-4 scanner.
+    # forced_reply_mate_depths gates the depth-4 reply-mate scan to queen/rook
+    # moves at search_depth=1 (probe.py); g3d6 is a bishop move, so the depth-4
+    # scanner does not run for it. The alphabeta search refutes g3d6 anyway
+    # (search_refutes:alphabeta:-550), and the move is excluded from the
+    # decision as before -- this is a refutation-channel change, not a mate-net
+    # gap. See reports/phase2-move-triage.md.
+    assert any(
+        objection.startswith("search_refutes:alphabeta:")
+        for objection in probes["g3d6"].objections
+    )
     assert probes["g3d6"].score == 700
     assert analysis.decision.move_uci in {
         "g3e5",
