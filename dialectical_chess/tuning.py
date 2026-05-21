@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+# Phase 2 opinion-valued argumentation constants from
+# reports/argdriven-phase2-design-v2.md section 1f.
+OPINION_EVIDENCE_UNITS_PER_STRENGTH = 2.0
+OPINION_LEAF_BASE_RATE = 0.5
+
 # P1.3 adopts the Codex review time-budget formula from
 # reviews/PLAN-argumentation-driven.md. These constants are the named terms in
 # that formula.

@@ -23,6 +23,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "chess" },
+    { name = "doxa" },
     { name = "formal-argumentation" },
 ]
 
@@ -37,6 +38,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "chess", specifier = ">=1.11.0" },
+    { name = "doxa", git = "https://github.com/ctoth/doxa.git?rev=f076502" },
     { name = "formal-argumentation", git = "https://github.com/ctoth/argumentation.git?rev=fdf32c1ce4d11a5b4902dcb171bcbedd4f3d7678" },
 ]
 
@@ -47,6 +49,11 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-timeout", specifier = ">=2.3" },
 ]
+
+[[package]]
+name = "doxa"
+version = "0.1.0"
+source = { git = "https://github.com/ctoth/doxa.git?rev=f076502#f076502184990a42f1531d3d7a27a5bcf606074c" }
 
 [[package]]
 name = "formal-argumentation"
