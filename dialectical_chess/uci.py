@@ -2,18 +2,33 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import TextIO
+from dataclasses import dataclass, replace
+from typing import Any, TextIO
 
 from dialectical_chess.board import START_FEN
 from dialectical_chess.engine import DialecticalChessEngine, EngineSettings
 from dialectical_chess.probe import owned_board_from_fen
-from dialectical_chess.search import ReplyAnalysisSettings
+from dialectical_chess.search import ReplyAnalysisSettings, position_repetition_key
 
 
 UciSettings = EngineSettings
 
 CANDIDATE_REPLY_MATE_SCAN_MIN_BUDGET_MS = 2_000
+
+
+@dataclass(frozen=True)
+class GameState:
+    board: Any
+    position_history: tuple[str, ...]
+    recent_own_move: str | None = None
+
+
+def game_state_for_board(board: Any, *, recent_own_move: str | None = None) -> GameState:
+    return GameState(
+        board=board,
+        position_history=(position_repetition_key(board),),
+        recent_own_move=recent_own_move,
+    )
 
 
 def run_uci(
@@ -41,8 +56,7 @@ def run_uci(
         reply_mate_scan=reply_mate_scan,
         reply_analysis=reply_analysis or ReplyAnalysisSettings(),
     )
-    board = owned_board_from_fen(START_FEN)
-    recent_own_move: str | None = None
+    game_state = game_state_for_board(owned_board_from_fen(START_FEN))
     while True:
         raw = input_stream.readline()
         if raw == "":
@@ -58,24 +72,29 @@ def run_uci(
         elif command == "isready":
             _uci_write(output_stream, "readyok")
         elif command == "ucinewgame":
-            board = owned_board_from_fen(START_FEN)
-            recent_own_move = None
+            game_state = game_state_for_board(owned_board_from_fen(START_FEN))
         elif command.startswith("position "):
             try:
-                board, parsed_recent_own_move = parse_uci_position_state(command)
-                if parsed_recent_own_move is not None or "moves" in command.split():
-                    recent_own_move = parsed_recent_own_move
+                parsed_state = parse_uci_position_state(command)
+                recent_own_move = game_state.recent_own_move
+                if parsed_state.recent_own_move is not None or "moves" in command.split():
+                    recent_own_move = parsed_state.recent_own_move
+                game_state = replace(parsed_state, recent_own_move=recent_own_move)
             except ValueError as exc:
                 _uci_write(output_stream, f"info string invalid position: {exc}")
         elif command.startswith("go") or command == "stop":
             move_settings = settings_for_go(
-                replace(settings, recent_own_move=recent_own_move),
-                board,
+                replace(
+                    settings,
+                    recent_own_move=game_state.recent_own_move,
+                    position_history=game_state.position_history,
+                ),
+                game_state.board,
                 command,
             )
-            chosen_move = choose_uci_move(board, settings=move_settings, output_stream=output_stream)
+            chosen_move = choose_uci_move(game_state.board, settings=move_settings, output_stream=output_stream)
             if chosen_move != "0000":
-                recent_own_move = chosen_move
+                game_state = replace(game_state, recent_own_move=chosen_move)
             _uci_write(output_stream, "bestmove " + chosen_move)
         elif command == "quit":
             return 0
@@ -86,10 +105,10 @@ def run_uci(
 
 
 def parse_uci_position(command: str):
-    return parse_uci_position_state(command)[0]
+    return parse_uci_position_state(command).board
 
 
-def parse_uci_position_state(command: str):
+def parse_uci_position_state(command: str) -> GameState:
     tokens = command.split()
     if len(tokens) < 2 or tokens[0] != "position":
         raise ValueError(command)
@@ -110,6 +129,7 @@ def parse_uci_position_state(command: str):
     else:
         raise ValueError("position must use startpos or fen")
 
+    position_history = [position_repetition_key(board)]
     move_history: list[str] = []
     if index < len(tokens):
         if tokens[index] != "moves":
@@ -121,9 +141,10 @@ def parse_uci_position_state(command: str):
                 raise ValueError(f"illegal move {move_text}")
             move_history.append(move_text)
             board = board.apply(move)
+            position_history.append(position_repetition_key(board))
             legal_by_uci = {next_move.uci(): next_move for next_move in board.legal_moves()}
     recent_own_move = move_history[-2] if len(move_history) >= 2 else None
-    return board, recent_own_move
+    return GameState(board=board, position_history=tuple(position_history), recent_own_move=recent_own_move)
 
 
 def choose_uci_move(

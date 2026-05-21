@@ -32,6 +32,8 @@ class ObjectionKind(str, Enum):
     UNANSWERED_ADVANCED_FLANK_PAWN = "unanswered_advanced_flank_pawn"
     UNSUPPORTED_MAJOR_DRIFT = "unsupported_major_drift"
     IMMEDIATE_REPETITION = "immediate_repetition"
+    THREEFOLD_REPETITION = "threefold_repetition"
+    FIFTY_MOVE_DRAW = "fifty_move_draw"
     OPENING_KING_WALK = "opening_king_walk"
     OPENING_KING_CENTER_FLIGHT = "opening_king_center_flight"
     OPENING_PREMATURE_QUEEN = "opening_premature_queen"
@@ -116,6 +118,8 @@ OBJECTION_STRENGTHS = {
     ObjectionKind.UNANSWERED_ADVANCED_FLANK_PAWN: 4,
     ObjectionKind.UNSUPPORTED_MAJOR_DRIFT: 1,
     ObjectionKind.IMMEDIATE_REPETITION: 2,
+    ObjectionKind.THREEFOLD_REPETITION: 2,
+    ObjectionKind.FIFTY_MOVE_DRAW: 2,
     ObjectionKind.OPENING_KING_WALK: 1,
     ObjectionKind.OPENING_KING_CENTER_FLIGHT: 1,
     ObjectionKind.OPENING_PREMATURE_QUEEN: 1,
@@ -217,6 +221,10 @@ def classify_objection(label: str) -> ObjectionKind:
         return ObjectionKind.UNSUPPORTED_MAJOR_DRIFT
     if label.startswith("strategy:immediate_repetition:"):
         return ObjectionKind.IMMEDIATE_REPETITION
+    if label.startswith("strategy:threefold_repetition:"):
+        return ObjectionKind.THREEFOLD_REPETITION
+    if label.startswith("strategy:fifty_move_draw:"):
+        return ObjectionKind.FIFTY_MOVE_DRAW
     if label.startswith("opening:king_walk:"):
         return ObjectionKind.OPENING_KING_WALK
     if label.startswith("opening:king_center_flight:"):

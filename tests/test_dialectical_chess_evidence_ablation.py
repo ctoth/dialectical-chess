@@ -43,6 +43,7 @@ from dialectical_chess.search import (  # noqa: E402
     ReplyAnalysisSettings,
     bounded_reply_attacks,
     owned_is_checkmate,
+    position_repetition_key,
 )
 from dialectical_chess.smt import smt_fork_moves, smt_mate_in_one_moves  # noqa: E402
 from dialectical_chess.uci import choose_uci_move  # noqa: E402
@@ -1899,8 +1900,11 @@ def test_unsupported_major_drift_rejects_file_control_queen_shuffle() -> None:
     assert decision.move_uci != "e7e6"
 
 
-def test_immediate_repetition_gets_history_objection() -> None:
+def test_threefold_repetition_gets_history_objection() -> None:
     board = owned_board_from_fen("r1b1k2r/pp2q1pp/2np1p2/5p2/5B1P/1PP2N2/P4PP1/RN1Q1K1R b kq - 2 14")
+    move = next(move for move in board.legal_moves() if move.uci() == "e7e6")
+    child_key = position_repetition_key(board.apply(move))
+    position_history = (position_repetition_key(board), child_key, child_key)
     probes = {
         probe.uci: probe
         for probe in probe_moves(
@@ -1910,11 +1914,12 @@ def test_immediate_repetition_gets_history_objection() -> None:
             search_backend="alphabeta",
             smt_mate=True,
             smt_fork=True,
-            recent_own_move="e6e7",
+            position_history=position_history,
         )
     }
 
-    assert "strategy:immediate_repetition:e7e6:reverses:e6e7" in probes["e7e6"].objections
+    assert "strategy:threefold_repetition:e7e6" in probes["e7e6"].objections
+    assert probes["e7e6"].score == 0
 
     decision = DialecticalChessEngine(
         EngineSettings(
@@ -1924,7 +1929,7 @@ def test_immediate_repetition_gets_history_objection() -> None:
             search_backend="alphabeta",
             smt_mate=True,
             smt_fork=True,
-            recent_own_move="e6e7",
+            position_history=position_history,
         )
     ).choose_move(board)
 

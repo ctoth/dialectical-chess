@@ -88,6 +88,12 @@ class OwnedBoard:
             ]
         )
 
+    def repetition_key(self) -> str:
+        return " ".join(self.fen().split()[:4])
+
+    def is_fifty_move_draw(self) -> bool:
+        return self.halfmove_clock >= 100
+
     def piece_at(self, square: str | int) -> str | None:
         return self.squares[square_index(square) if isinstance(square, str) else square]
 

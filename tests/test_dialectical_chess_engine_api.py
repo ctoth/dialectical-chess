@@ -49,6 +49,7 @@ def test_engine_settings_are_plain_serializable(
             "min_defense_material": 300,
         },
         "recent_own_move": None,
+        "position_history": (),
     }
 
 

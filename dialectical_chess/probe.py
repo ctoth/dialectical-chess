@@ -19,6 +19,9 @@ from dialectical_chess.search import (
     owned_capture_value,
     owned_is_capture,
     owned_is_checkmate,
+    owned_is_draw,
+    owned_is_threefold_repetition,
+    append_position_history,
     root_search_result,
 )
 from dialectical_chess.smt import (
@@ -38,6 +41,7 @@ class ProbeSettings:
     positional_reasons: bool = True
     reply_mate_scan: bool = True
     recent_own_move: str | None = None
+    position_history: tuple[str, ...] = ()
 
 
 def probe_moves(
@@ -52,6 +56,7 @@ def probe_moves(
     reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
     recent_own_move: str | None = None,
+    position_history: tuple[str, ...] = (),
 ) -> list[MoveProbe]:
     settings = ProbeSettings(
         dialectic_depth=dialectic_depth,
@@ -61,6 +66,7 @@ def probe_moves(
         positional_reasons=positional_reasons,
         reply_mate_scan=reply_mate_scan,
         recent_own_move=recent_own_move,
+        position_history=position_history,
     )
     return probe_moves_with_settings(board, settings)
 
@@ -85,26 +91,30 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         captured_value = owned_capture_value(board, move)
         promotion_value = OWNED_PIECE_VALUE.get(move.promotion or "", 0)
         child = board.apply(move)
+        child_position_history = append_position_history(settings.position_history, child)
         is_checkmate = owned_is_checkmate(child)
+        is_draw = owned_is_draw(child, position_history=child_position_history)
         gives_check = child.in_check(child.turn)
 
         reasons: list[str] = []
         objections: list[str] = []
         score = 0
 
-        if is_checkmate:
+        if is_draw:
+            objections.extend(draw_objections(move, child=child, position_history=child_position_history))
+        elif is_checkmate:
             score += 1_000_000
             reasons.append("terminal:checkmate")
-        if gives_check:
+        if not is_draw and gives_check:
             score += 1_000
             reasons.append("tactical:check")
-        if is_capture:
+        if not is_draw and is_capture:
             score += captured_value
             reasons.append(f"material:capture:{captured_value}")
-        if promotion_value:
+        if not is_draw and promotion_value:
             score += promotion_value
             reasons.append(f"material:promotion:{promotion_value}")
-        if not is_checkmate:
+        if not is_draw and not is_checkmate:
             safety_reasons, safety_objections, safety_score = moved_piece_safety_labels(
                 board,
                 move,
@@ -174,23 +184,28 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
                 objections.extend(reply_mate_objections)
                 score += reply_mate_score
-        if settings.positional_reasons:
+        if not is_draw and settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional:
                 score += 25 * len(positional)
                 reasons.extend(positional)
         smt_witnesses: list[str] = []
-        if move.uci() in smt_mate_moves:
+        if not is_draw and move.uci() in smt_mate_moves:
             score += 1_000_000
             reasons.append("procedural:mate_in_one")
             smt_witnesses.append("procedural_mate_in_one")
-        if move.uci() in smt_fork_move_set:
+        if not is_draw and move.uci() in smt_fork_move_set:
             fork_reasons, fork_objections, fork_score = fork_witness_labels(smt_fork_witness_map[move.uci()], gives_check)
             score += fork_score
             reasons.extend(fork_reasons)
             objections.extend(fork_objections)
             smt_witnesses.append("fork")
-        search_result = root_search_result(board, move, settings=settings.search)
+        search_result = None if is_draw else root_search_result(
+            board,
+            move,
+            settings=settings.search,
+            position_history=settings.position_history,
+        )
         if search_result is not None:
             search_line_label = "search_line:" + "-".join(search_result.line)
             if search_result.score > 0:
@@ -211,26 +226,17 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
                 objections.extend(reply_mate_objections)
                 score += reply_mate_score
-        drift_objections, drift_score = unsupported_major_drift_objections(
-            board,
-            move,
-            captured_value=captured_value,
-            gives_check=gives_check,
-            reasons=reasons,
-        )
-        objections.extend(drift_objections)
-        score += drift_score
-        repetition_objections, repetition_score = immediate_repetition_objections(
-            move,
-            recent_own_move=settings.recent_own_move,
-            captured_value=captured_value,
-            gives_check=gives_check,
-            promotion_value=promotion_value,
-            reasons=reasons,
-        )
-        objections.extend(repetition_objections)
-        score += repetition_score
-        reply_attacks = bounded_reply_attacks(
+        if not is_draw:
+            drift_objections, drift_score = unsupported_major_drift_objections(
+                board,
+                move,
+                captured_value=captured_value,
+                gives_check=gives_check,
+                reasons=reasons,
+            )
+            objections.extend(drift_objections)
+            score += drift_score
+        reply_attacks = () if is_draw else bounded_reply_attacks(
             board,
             move,
             reply_depth=settings.dialectic_depth,
@@ -294,25 +300,19 @@ def unsupported_major_drift_objections(
     return ((f"strategy:unsupported_major_drift:{move.uci()}",), -300)
 
 
-def immediate_repetition_objections(
+def draw_objections(
     move: Any,
     *,
-    recent_own_move: str | None,
-    captured_value: int,
-    gives_check: bool,
-    promotion_value: int,
-    reasons: list[str],
-) -> tuple[tuple[str, ...], int]:
-    if recent_own_move is None or len(recent_own_move) < 4:
-        return (), 0
-    if captured_value > 0 or promotion_value > 0 or gives_check:
-        return (), 0
-    if any(is_direct_tactical_warrant(reason) for reason in reasons):
-        return (), 0
+    child: OwnedBoard,
+    position_history: tuple[str, ...],
+) -> tuple[str, ...]:
+    objections = []
     move_text = move.uci()
-    if move_text[:2] != recent_own_move[2:4] or move_text[2:4] != recent_own_move[:2]:
-        return (), 0
-    return ((f"strategy:immediate_repetition:{move_text}:reverses:{recent_own_move}",), -1_000)
+    if owned_is_threefold_repetition(child, position_history=position_history):
+        objections.append(f"strategy:threefold_repetition:{move_text}")
+    if child.is_fifty_move_draw():
+        objections.append(f"strategy:fifty_move_draw:{move_text}")
+    return tuple(objections)
 
 
 def is_direct_tactical_warrant(reason: str) -> bool:

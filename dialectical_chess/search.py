@@ -86,28 +86,46 @@ def root_search_result(
     move: Any,
     *,
     settings: SearchSettings,
+    position_history: tuple[str, ...] = (),
 ) -> SearchResult | None:
     if settings.depth <= 0:
         return None
     child_board = board.apply(move)
+    child_history = append_position_history(position_history, child_board)
     if settings.backend == "negamax":
-        child = negamax(child_board, settings.depth - 1)
+        child = negamax(child_board, settings.depth - 1, position_history=child_history)
     elif settings.backend == "alphabeta":
-        child = alphabeta(child_board, settings.depth - 1, alpha=-1_000_000, beta=1_000_000)
+        child = alphabeta(
+            child_board,
+            settings.depth - 1,
+            alpha=-1_000_000,
+            beta=1_000_000,
+            position_history=child_history,
+        )
     else:
         raise ValueError(f"unsupported search backend: {settings.backend}")
     return SearchResult(score=-child.score, line=(move.uci(),) + child.line)
 
 
-def negamax(board: Any, depth: int) -> SearchResult:
-    terminal = terminal_or_leaf_result(board, depth)
+def negamax(
+    board: Any,
+    depth: int,
+    *,
+    position_history: tuple[str, ...] = (),
+) -> SearchResult:
+    terminal = terminal_or_leaf_result(board, depth, position_history=position_history)
     if terminal.result is not None:
         return terminal.result
 
     best: SearchResult | None = None
     best_move: Any | None = None
     for move in ordered_moves(board, terminal.legal_moves):
-        child = negamax(board.apply(move), depth - 1)
+        child_board = board.apply(move)
+        child = negamax(
+            child_board,
+            depth - 1,
+            position_history=append_position_history(position_history, child_board),
+        )
         candidate = SearchResult(score=-child.score, line=(move.uci(),) + child.line)
         if (
             best is None
@@ -131,15 +149,23 @@ def alphabeta(
     *,
     alpha: int,
     beta: int,
+    position_history: tuple[str, ...] = (),
 ) -> SearchResult:
-    terminal = terminal_or_leaf_result(board, depth)
+    terminal = terminal_or_leaf_result(board, depth, position_history=position_history)
     if terminal.result is not None:
         return terminal.result
 
     best: SearchResult | None = None
     best_move: Any | None = None
     for move in ordered_moves(board, terminal.legal_moves):
-        child = alphabeta(board.apply(move), depth - 1, alpha=-beta, beta=-alpha)
+        child_board = board.apply(move)
+        child = alphabeta(
+            child_board,
+            depth - 1,
+            alpha=-beta,
+            beta=-alpha,
+            position_history=append_position_history(position_history, child_board),
+        )
         candidate = SearchResult(score=-child.score, line=(move.uci(),) + child.line)
         if (
             best is None
@@ -166,8 +192,15 @@ class TerminalSearchState:
     result: SearchResult | None
 
 
-def terminal_or_leaf_result(board: Any, depth: int) -> TerminalSearchState:
+def terminal_or_leaf_result(
+    board: Any,
+    depth: int,
+    *,
+    position_history: tuple[str, ...] = (),
+) -> TerminalSearchState:
     legal_moves = tuple(board.legal_moves())
+    if owned_is_draw(board, position_history=position_history):
+        return TerminalSearchState(legal_moves, SearchResult(score=0, line=()))
     if not legal_moves:
         if board.in_check(board.turn):
             return TerminalSearchState(legal_moves, SearchResult(score=-100_000 - depth, line=()))
@@ -359,6 +392,35 @@ def owned_capture_value(board: Any, move: Any) -> int:
 
 def owned_is_terminal(board: Any) -> bool:
     return len(board.legal_moves()) == 0
+
+
+def position_repetition_key(board: Any) -> str:
+    if hasattr(board, "repetition_key"):
+        return board.repetition_key()
+    return " ".join(board.fen().split()[:4])
+
+
+def append_position_history(position_history: tuple[str, ...], board: Any) -> tuple[str, ...]:
+    return position_history + (position_repetition_key(board),)
+
+
+def owned_is_threefold_repetition(
+    board: Any,
+    *,
+    position_history: tuple[str, ...],
+) -> bool:
+    return position_history.count(position_repetition_key(board)) >= 3
+
+
+def owned_is_draw(
+    board: Any,
+    *,
+    position_history: tuple[str, ...] = (),
+) -> bool:
+    is_fifty_move_draw = getattr(board, "is_fifty_move_draw", None)
+    if callable(is_fifty_move_draw) and bool(is_fifty_move_draw()):
+        return True
+    return owned_is_threefold_repetition(board, position_history=position_history)
 
 
 def owned_is_checkmate(board: Any) -> bool:
