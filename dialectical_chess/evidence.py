@@ -105,39 +105,6 @@ TACTICAL_REASON_PREFIXES = (
 COMPENSATING_TACTICAL_THREAT_THRESHOLD = 700
 LARGE_SEARCH_REFUTATION_THRESHOLD = -500
 
-OBJECTION_STRENGTHS = {
-    ObjectionKind.SEARCH_REFUTATION: 1,
-    ObjectionKind.SMT_FORK_HIGH_VALUE: 3,
-    ObjectionKind.REPLY_MATE_IN_ONE: 6,
-    ObjectionKind.REPLY_FORCED_MATE: 3,
-    ObjectionKind.QUEEN_BLUNDER: 2,
-    ObjectionKind.IGNORED_HANGING_PIECE: 1,
-    ObjectionKind.MOVED_PIECE_EN_PRIS: 1,
-    ObjectionKind.QUEEN_FLANK_INVASION: 2,
-    ObjectionKind.UNANSWERED_ADVANCED_FLANK_PAWN: 4,
-    ObjectionKind.UNSUPPORTED_MAJOR_DRIFT: 1,
-    ObjectionKind.THREEFOLD_REPETITION: 2,
-    ObjectionKind.FIFTY_MOVE_DRAW: 2,
-    ObjectionKind.OPENING_KING_WALK: 1,
-    ObjectionKind.OPENING_KING_CENTER_FLIGHT: 1,
-    ObjectionKind.OPENING_PREMATURE_QUEEN: 1,
-    ObjectionKind.OPENING_PREMATURE_ROOK: 1,
-    ObjectionKind.OPENING_MINOR_RETREAT: 1,
-    ObjectionKind.OPENING_PREMATURE_MINOR_CHECK: 1,
-    ObjectionKind.FLANK_PAWN_WEAKENING: 1,
-    ObjectionKind.CASTLED_FLANK_PAWN_WEAKENING: 1,
-    ObjectionKind.FLANK_PAWN_LUNGE: 1,
-}
-
-DEFEATER_STRENGTHS = {
-    DefeaterKind.SEARCH_SUPPORT: 97,
-    DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE: 33,
-    DefeaterKind.COMPENSATING_FORCING_PRESSURE: 33,
-    DefeaterKind.FORCING_MATERIAL_GAIN: 33,
-    DefeaterKind.COMPENSATING_TACTICAL_PRESSURE: 17,
-}
-
-
 def to_argument_evidence(label: str) -> ArgumentEvidence:
     world = evidence_world(label)
     objection_kind = classify_objection(label)
@@ -161,7 +128,7 @@ def to_argument_evidence(label: str) -> ArgumentEvidence:
         reply_attack_strength=reply_attack_strength(label),
         defense_strength=defense_strength(label),
         defeater_kind=defeater_kind,
-        defeater_strength=0 if defeater_kind is None else DEFEATER_STRENGTHS[defeater_kind],
+        defeater_strength=0 if defeater_kind is None else defeater_strength(defeater_kind),
         defended_piece_value=defended_value,
         moved_piece_en_pris_value=moved_piece_value,
         tactical_threat_value=tactical_threat_value(label),
@@ -349,13 +316,67 @@ def objection_strength(
         if refutation_score is not None and refutation_score <= -100_000:
             return 6
         if refutation_score is not None and refutation_score <= LARGE_SEARCH_REFUTATION_THRESHOLD:
-            return OBJECTION_STRENGTHS[ObjectionKind.SEARCH_REFUTATION]
+            return 1
         return 0
     if objection_kind == ObjectionKind.REPLY_FORCED_MATE:
-        return 6 if forced_mate_depth(label) == 2 else OBJECTION_STRENGTHS[objection_kind]
-    if objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS and (moved_value is None or moved_value < 300):
+        return 6 if forced_mate_depth(label) == 2 else 3
+    if (
+        objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
+        and (moved_value is None or moved_value < 300)
+    ):
         return 0
-    return OBJECTION_STRENGTHS.get(objection_kind, 0)
+    return base_objection_strength(objection_kind)
+
+
+def base_objection_strength(objection_kind: ObjectionKind) -> int:
+    match objection_kind:
+        case ObjectionKind.SEARCH_REFUTATION:
+            return 1
+        case ObjectionKind.SMT_FORK_HIGH_VALUE:
+            return 3
+        case ObjectionKind.REPLY_MATE_IN_ONE:
+            return 6
+        case ObjectionKind.REPLY_FORCED_MATE:
+            return 3
+        case ObjectionKind.QUEEN_BLUNDER:
+            return 2
+        case ObjectionKind.UNANSWERED_ADVANCED_FLANK_PAWN:
+            return 4
+        case ObjectionKind.THREEFOLD_REPETITION | ObjectionKind.FIFTY_MOVE_DRAW:
+            return 2
+        case (
+            ObjectionKind.IGNORED_HANGING_PIECE
+            | ObjectionKind.MOVED_PIECE_EN_PRIS
+            | ObjectionKind.UNSUPPORTED_MAJOR_DRIFT
+            | ObjectionKind.OPENING_KING_WALK
+            | ObjectionKind.OPENING_KING_CENTER_FLIGHT
+            | ObjectionKind.OPENING_PREMATURE_QUEEN
+            | ObjectionKind.OPENING_PREMATURE_ROOK
+            | ObjectionKind.OPENING_MINOR_RETREAT
+            | ObjectionKind.OPENING_PREMATURE_MINOR_CHECK
+            | ObjectionKind.FLANK_PAWN_WEAKENING
+            | ObjectionKind.CASTLED_FLANK_PAWN_WEAKENING
+            | ObjectionKind.FLANK_PAWN_LUNGE
+        ):
+            return 1
+        case ObjectionKind.QUEEN_FLANK_INVASION:
+            return 2
+        case _:
+            return 0
+
+
+def defeater_strength(defeater_kind: DefeaterKind) -> int:
+    match defeater_kind:
+        case DefeaterKind.SEARCH_SUPPORT:
+            return 97
+        case (
+            DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE
+            | DefeaterKind.COMPENSATING_FORCING_PRESSURE
+            | DefeaterKind.FORCING_MATERIAL_GAIN
+        ):
+            return 33
+        case DefeaterKind.COMPENSATING_TACTICAL_PRESSURE:
+            return 17
 
 
 def reply_attack_strength(label: str) -> int:

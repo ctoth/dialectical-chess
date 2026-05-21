@@ -7,13 +7,10 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from dialectical_chess.arguments import (
-    LARGE_SEARCH_REFUTATION_THRESHOLD,
     MoveProbe,
-    RootArgumentGraph,
-    build_root_argument_graph,
     choose_move,
 )
-from dialectical_chess.evidence import to_argument_evidence
+from dialectical_chess.evidence import LARGE_SEARCH_REFUTATION_THRESHOLD, to_argument_evidence
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.probe import ensure_owned_board, probe_moves
 from dialectical_chess.search import ReplyAnalysisSettings
@@ -48,7 +45,6 @@ class EngineDecision:
 @dataclass(frozen=True)
 class EngineAnalysis:
     probes: tuple[MoveProbe, ...]
-    graph: RootArgumentGraph
     decision: EngineDecision
 
 
@@ -75,22 +71,20 @@ class DialecticalChessEngine:
                 deadline=self.settings.deadline,
             )
         )
-        graph = build_root_argument_graph(probes)
-        selected = choose_move(probes, graph) if probes else None
+        selected = choose_move(probes) if probes else None
         if uses_selected_reply_mate_refutation(self.settings):
-            probes, graph, selected = selected_reply_mate_refutation_fixpoint(
+            probes, selected = selected_reply_mate_refutation_fixpoint(
                 board,
-            probes,
-            graph,
-            selected,
-            allow_mate_four=self.settings.reply_mate_scan,
-            deadline=self.settings.deadline,
+                probes,
+                selected,
+                allow_mate_four=self.settings.reply_mate_scan,
+                deadline=self.settings.deadline,
         )
         decision = EngineDecision(
             move_uci="0000" if selected is None else selected.uci,
             selected=selected,
         )
-        return EngineAnalysis(probes=tuple(probes), graph=graph, decision=decision)
+        return EngineAnalysis(probes=tuple(probes), decision=decision)
 
     def choose_move(self, board: Any) -> EngineDecision:
         return self.analyze(board).decision
@@ -99,15 +93,14 @@ class DialecticalChessEngine:
 def selected_reply_mate_refutation_fixpoint(
     board: Any,
     probes: list[MoveProbe],
-    graph: RootArgumentGraph,
     selected: MoveProbe | None,
     *,
     allow_mate_four: bool,
     deadline: float | None = None,
-) -> tuple[list[MoveProbe], RootArgumentGraph, MoveProbe | None]:
+) -> tuple[list[MoveProbe], MoveProbe | None]:
     move_by_uci = {move.uci(): move for move in board.legal_moves()}
     if not allow_mate_four and len(move_by_uci) > SELECTED_REPLY_MATE_LOW_CLOCK_LEGAL_LIMIT:
-        return probes, graph, selected
+        return probes, selected
     refuted: set[str] = set()
     while selected is not None and selected.uci not in refuted:
         if deadline is not None and time.monotonic() >= deadline:
@@ -131,9 +124,8 @@ def selected_reply_mate_refutation_fixpoint(
             else probe
             for probe in probes
         ]
-        graph = build_root_argument_graph(probes)
-        selected = choose_move(probes, graph) if probes else None
-    return probes, graph, selected
+        selected = choose_move(probes) if probes else None
+    return probes, selected
 
 
 def selected_reply_mate_depths(
