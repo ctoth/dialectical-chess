@@ -199,11 +199,11 @@ def terminal_or_leaf_result(
     position_history: tuple[str, ...] = (),
 ) -> TerminalSearchState:
     legal_moves = tuple(board.legal_moves())
-    if owned_is_draw(board, position_history=position_history):
-        return TerminalSearchState(legal_moves, SearchResult(score=0, line=()))
     if not legal_moves:
         if board.in_check(board.turn):
             return TerminalSearchState(legal_moves, SearchResult(score=-100_000 - depth, line=()))
+        return TerminalSearchState(legal_moves, SearchResult(score=0, line=()))
+    if owned_is_draw(board, position_history=position_history):
         return TerminalSearchState(legal_moves, SearchResult(score=0, line=()))
     if depth <= 0:
         return TerminalSearchState(legal_moves, SearchResult(score=static_evaluation(board), line=()))

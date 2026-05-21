@@ -7,6 +7,7 @@ from dialectical_chess.search import (
     owned_is_draw,
     position_repetition_key,
     root_search_result,
+    terminal_or_leaf_result,
 )
 from dialectical_chess.uci import parse_uci_position_state
 
@@ -27,6 +28,32 @@ def test_halfmove_clock_at_one_hundred_is_draw() -> None:
 
     assert board.is_fifty_move_draw()
     assert owned_is_draw(board)
+
+
+def test_checkmate_at_one_hundred_halfmoves_is_not_scored_as_draw() -> None:
+    board = OwnedBoard.from_fen("7k/5KQ1/8/8/8/8/8/8 b - - 100 75")
+
+    terminal = terminal_or_leaf_result(board, depth=3)
+
+    assert terminal.result is not None
+    assert terminal.result.score == -100_003
+
+
+def test_mate_in_one_on_one_hundredth_halfmove_scores_as_mate() -> None:
+    board = OwnedBoard.from_fen("7k/8/5KQ1/8/8/8/8/8 w - - 99 75")
+    probes = {
+        probe.uci: probe
+        for probe in probe_moves(
+            board,
+            smt_mate=False,
+            smt_fork=False,
+            reply_mate_scan=False,
+        )
+    }
+
+    assert probes["g6g7"].score >= 1_000_000
+    assert "terminal:checkmate" in probes["g6g7"].reasons
+    assert "strategy:fifty_move_draw:g6g7" not in probes["g6g7"].objections
 
 
 def test_repetition_draw_move_is_not_scored_as_a_win() -> None:

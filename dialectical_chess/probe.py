@@ -20,6 +20,7 @@ from dialectical_chess.search import (
     owned_is_capture,
     owned_is_checkmate,
     owned_is_draw,
+    owned_is_stalemate,
     owned_is_threefold_repetition,
     append_position_history,
     root_search_result,
@@ -93,18 +94,23 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         child = board.apply(move)
         child_position_history = append_position_history(settings.position_history, child)
         is_checkmate = owned_is_checkmate(child)
-        is_draw = owned_is_draw(child, position_history=child_position_history)
+        is_stalemate = owned_is_stalemate(child)
+        is_draw = (
+            False
+            if is_checkmate or is_stalemate
+            else owned_is_draw(child, position_history=child_position_history)
+        )
         gives_check = child.in_check(child.turn)
 
         reasons: list[str] = []
         objections: list[str] = []
         score = 0
 
-        if is_draw:
-            objections.extend(draw_objections(move, child=child, position_history=child_position_history))
-        elif is_checkmate:
+        if is_checkmate:
             score += 1_000_000
             reasons.append("terminal:checkmate")
+        elif is_draw:
+            objections.extend(draw_objections(move, child=child, position_history=child_position_history))
         if not is_draw and gives_check:
             score += 1_000
             reasons.append("tactical:check")
