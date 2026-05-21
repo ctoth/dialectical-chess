@@ -319,12 +319,23 @@ def read_bestmove(process: subprocess.Popen[str], *, timeout_seconds: float = IN
     stdout = process.stdout
     lines: queue.Queue[str] = queue.Queue()
 
-    def read_line() -> None:
-        lines.put(stdout.readline())
+    # One persistent reader thread for the lifetime of this call. The previous
+    # implementation spawned a fresh reader per loop iteration, so two threads
+    # could be blocked on readline() of the same stream at once (lines dequeued
+    # out of order) and orphaned readers leaked on every non-bestmove line.
+    # A single reader guarantees at most one outstanding readline(); on timeout
+    # process.kill() makes the reader observe EOF and exit on its own.
+    def read_lines() -> None:
+        try:
+            for line in iter(stdout.readline, ""):
+                lines.put(line)
+        finally:
+            lines.put("")
+
+    reader = threading.Thread(target=read_lines, daemon=True)
+    reader.start()
 
     while True:
-        reader = threading.Thread(target=read_line, daemon=True)
-        reader.start()
         try:
             line = lines.get(timeout=timeout_seconds)
         except queue.Empty as exc:

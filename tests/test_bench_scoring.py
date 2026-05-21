@@ -101,6 +101,85 @@ def test_score_board_requires_bm_and_am_when_both_present(monkeypatch) -> None:
     assert result["avoided"] is False
 
 
+def test_read_bestmove_times_out_on_hanging_engine_and_kills_process() -> None:
+    """M2 regression: a hung engine must trip the watchdog -- TimeoutError and
+    process.kill() -- and the single persistent reader must not leak."""
+    import threading
+
+    from dialectical_chess.matches import read_bestmove
+
+    hang_forever = threading.Event()
+
+    class HangingStdout:
+        def readline(self):
+            # Block as a real stdout would on a non-responsive engine, until
+            # the process is killed (kill() releases the wait).
+            hang_forever.wait(timeout=10.0)
+            return ""
+
+    class FakePopen:
+        def __init__(self):
+            self.stdout = HangingStdout()
+            self.killed = False
+
+        def kill(self):
+            self.killed = True
+            hang_forever.set()
+
+    process = FakePopen()
+    threads_before = threading.active_count()
+
+    try:
+        read_bestmove(process, timeout_seconds=0.1)  # type: ignore[arg-type]
+        assert False, "expected TimeoutError"
+    except TimeoutError:
+        pass
+
+    assert process.killed is True
+    # The single reader thread observes EOF (kill released the wait) and exits;
+    # no orphaned readers accumulate.
+    for reader in threading.enumerate():
+        if reader is not threading.current_thread() and reader.daemon:
+            reader.join(timeout=2.0)
+    assert threading.active_count() <= threads_before
+
+
+def test_read_bestmove_reads_lines_in_stream_order() -> None:
+    """M2 regression: a chatty engine emitting many info lines before bestmove
+    must be read in stream order by the single persistent reader -- no
+    concurrent readline() reordering."""
+    from dialectical_chess.matches import read_bestmove
+
+    class ChattyStdout:
+        def __init__(self):
+            self._lines = iter(
+                [
+                    "info depth 1 score cp 10\n",
+                    "info depth 2 score cp 12\n",
+                    "info depth 3 score cp 15\n",
+                    "bestmove e2e4 ponder e7e5\n",
+                ]
+            )
+
+        def readline(self):
+            return next(self._lines, "")
+
+    class FakePopen:
+        def __init__(self):
+            self.stdout = ChattyStdout()
+            self.killed = False
+
+        def kill(self):
+            self.killed = True
+
+    process = FakePopen()
+
+    move = read_bestmove(process, timeout_seconds=2.0)  # type: ignore[arg-type]
+
+    assert move == "e2e4"
+    assert process.killed is False
+
+
 def test_run_uci_match_treats_unparsed_game_count_as_not_ok(monkeypatch) -> None:
     import dialectical_chess.matches as matches
 
