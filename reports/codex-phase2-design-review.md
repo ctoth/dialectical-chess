@@ -1,6 +1,6 @@
 # Codex Phase 2 design review
 
-Verdict: the load-bearing `doxa` computations in `reports/argdriven-phase2-design.md` hold, including the decisive queen-grab example, so the skeptical filter is genuinely needed. The design is not structurally doomed, but it is not sound to implement unchanged: the filter consistency promise is stronger than the API actually enforces, hard-filter counterdefeat/false-positive behavior is underspecified, the value-layer drop silently changes a stated theory property, and the static-prior contract remains a load-bearing blank delegated to P2.4. Fix those before P2.2/P2.5 coding.
+Verdict: the load-bearing `doxa` computations in `reports/argdriven-phase2-design.md` hold, including the decisive queen-grab example, so the skeptical filter is genuinely needed. The design is not structurally doomed, but it is not sound to implement unchanged: the one-leaf-per-reason encoding collapses identical evidence under CCF, `k=0` leaves are not safely "dropped" once connected by edges, the filter consistency promise is stronger than the API enforces, hard-filter counterdefeat/false-positive behavior is underspecified, the value-layer drop changes a stated theory property, and the static-prior contract remains a load-bearing blank delegated to P2.4. Fix those before P2.2/P2.5 coding.
 
 ## Computation check
 
@@ -12,14 +12,24 @@ Re-run against the real `doxa` checkout at `C:\Users\Q\code\doxa` with `uv run p
 - Queen-grab example: `move:qxq` with `tau=0.85`, `k=9` support, `k=6` mate objection resolves to `b=0.128571, d=0.085714, u=0.785714, E=0.796429`; `move:nf3` with `tau=0.55` and two `k=1` reasons resolves to `E=0.775000`. The queen grab beats the quiet move, confirming `reports/argdriven-phase2-design.md:399-409`.
 - Weak-objection value example: `k=9` support plus `k=1` objection at `tau=0.6` gives `E=0.750000`; dropping the objection gives `E=0.960000`. This confirms `reports/argdriven-phase2-design.md:315-332`.
 - Dung filter behavior with the actual `formal-argumentation` API: `defeats={obj:mate -> move:qxq}` gives grounded extension `{obj:mate, move:nf3}`; adding `def:mate -> obj:mate` gives `{def:mate, move:qxq, move:nf3}`.
+- Identical reason collapse: at `tau=0.55`, one `k=1` support, two `k=1` supports, and four `k=1` supports all resolve to `E=0.775000`. The design already notes CCF idempotence at `reports/argdriven-phase2-design.md:62-64`, but it does not apply that fact to the one-leaf-per-reason encoding.
+- `k=0` connected leaves are not generally harmless. In support-only cases they were neutral in my checks, but in mixed conflict they changed the result: `supports=[9], attacks=[1]` gave `E=0.725000`, while `supports=[9,0], attacks=[1]` gave `E=0.882500`. So the builder must skip zero-strength evidence rather than emit vacuous leaves.
 
 ## Critical
 
-1. Filter/opinion consistency is promised but not enforced by the locked API.
+1. The one-leaf-per-reason encoding cannot count same-band reasons.
+   Location: `reports/argdriven-phase2-design.md:72-96`, `reports/argdriven-phase2-design.md:201-202`, `reports/argdriven-phase2-design.md:640`; CCF implementation at `C:\Users\Q\code\doxa\src\doxa\opinion.py:508-533`, `C:\Users\Q\code\doxa\src\doxa\opinion.py:587-714`.
+   The design maps each typed evidence item to its own leaf, then relies on CCF accrual. CCF is idempotent on identical opinions, and many engine reasons share exactly the same `k` and `a`. Re-run result: one, two, or four `k=1` positional supports all produce `E=0.775000` at `tau=0.55`. That means the Phase 2 graph cannot distinguish a move with one weak positional reason from a move with several independent weak positional reasons. Concrete fix: aggregate evidence counts before opinion construction, e.g. one support leaf per move/role with `r = sum(k_i * EV)`, or a documented evidence-bag node that sums Beta evidence for explainability while presenting one opinion source to CCF.
+
+2. `k=0` evidence must be skipped, not encoded as a connected vacuous leaf.
+   Location: `reports/argdriven-phase2-design.md:116-121`, `reports/argdriven-phase2-design.md:530-535`; doxa source-pool construction at `C:\Users\Q\code\doxa\src\doxa\argumentation.py:220-240`.
+   Model C drops a node's own vacuous intrinsic only when evaluating that node. It does not drop a vacuous child opinion arriving over a support or attack edge; edge sources are appended before CCF. Re-run result: adding a `k=0` support source to a mixed `k=9` support plus `k=1` attack changed `E` from `0.725000` to `0.882500`. Concrete fix: make `build_opinion_graph` omit every zero-strength evidence item entirely: no leaf, no edge. Delete the `leaf_intrinsic(0) -> Opinion.vacuous(A_ROLE)` API branch or mark it private/testing-only.
+
+3. Filter/opinion consistency is promised but not enforced by the locked API.
    Location: `reports/argdriven-phase2-design.md:444-453`, `reports/argdriven-phase2-design.md:538-600`.
    The design says the filter graph and opinion graph are built "in one pass from the same `MoveProbe` list, by the same builder", but the API actually exposes separate `build_opinion_graph(probes)` and `skeptical_survivors(probes)` calls. That lets P2.5 and P2.6 classify evidence independently and drift. Concrete fix: replace the two independent builders with one artifact builder, e.g. `build_argumentation_artifacts(probes) -> MoveArgumentationArtifacts`, containing the `BipolarOpinionGraph`, `move_arg`, filter AF, and a trace table from each `ArgumentEvidence` to opinion/filter nodes. `skeptical_survivors` should consume that artifact, not re-parse probes.
 
-2. The hard filter has no specified counterdefeater policy.
+4. The hard filter has no specified counterdefeater policy.
    Location: `reports/argdriven-phase2-design.md:422-441`; prompt asks this explicitly. The current text includes hard refuters but not any hard-filter edges that can defeat a refuter. In real Dung behavior, adding `def -> obj:mate` makes `move:qxq` survive; omitting that edge permanently filters the move before the opinion graph can consider the defense. Concrete fix: either prove and state that `is_forced_mate_refutation` arguments are never counterdefeatable in Phase 2, then assert that in tests, or include a closed list of filter-level counterdefeaters and their `defeats` edges. Do not leave it to coder judgment.
 
 ## Major
@@ -53,6 +63,10 @@ Re-run against the real `doxa` checkout at `C:\Users\Q\code\doxa` with `uv run p
 3. The empty-survivor fallback needs a testable policy, not just a log note.
    Location: `reports/argdriven-phase2-design.md:455-463`.
    Falling back to all moves is reasonable in lost positions, but it can also mask an over-broad filter. Concrete fix: require the decider result to expose `empty_survivors=True`, and add a test where every move is hard-refuted plus a test where an over-filtered constructed position fails.
+
+4. The deterministic tie-break contradicts the stated "smallest-name-first" rationale.
+   Location: `reports/argdriven-phase2-design.md:478-487`.
+   `max(..., key=(expectation, p.uci))` chooses the largest UCI string on equal expectation, while the text compares it to doxa's smallest-name-first traversal. Exact ties are common because identical same-band reasons collapse under CCF. Concrete fix: either state "largest UCI wins" as the intended deterministic rule, or use a smallest-UCI tiebreak explicitly.
 
 ## Keep
 
