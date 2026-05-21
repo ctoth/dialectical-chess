@@ -32,7 +32,6 @@ class EngineSettings:
     positional_reasons: bool = True
     reply_mate_scan: bool = True
     reply_analysis: ReplyAnalysisSettings = ReplyAnalysisSettings()
-    recent_own_move: str | None = None
     position_history: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -76,7 +75,6 @@ class DialecticalChessEngine:
                 positional_reasons=self.settings.positional_reasons,
                 reply_mate_scan=self.settings.reply_mate_scan,
                 reply_analysis=self.settings.reply_analysis,
-                recent_own_move=self.settings.recent_own_move,
                 position_history=self.settings.position_history,
             )
         )

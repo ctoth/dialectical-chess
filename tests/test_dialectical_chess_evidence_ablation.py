@@ -44,10 +44,9 @@ from dialectical_chess.search import (  # noqa: E402
     ReplyAnalysisSettings,
     bounded_reply_attacks,
     owned_is_checkmate,
-    position_repetition_key,
 )
 from dialectical_chess.smt import smt_fork_moves, smt_mate_in_one_moves  # noqa: E402
-from dialectical_chess.uci import choose_uci_move  # noqa: E402
+from dialectical_chess.uci import choose_uci_move, parse_uci_position_state  # noqa: E402
 
 
 SELECTOR_MODES = ("argument", "score", "grounded", "support", "categoriser", "optimizer")
@@ -1902,10 +1901,12 @@ def test_unsupported_major_drift_rejects_file_control_queen_shuffle() -> None:
 
 
 def test_threefold_repetition_gets_history_objection() -> None:
-    board = owned_board_from_fen("r1b1k2r/pp2q1pp/2np1p2/5p2/5B1P/1PP2N2/P4PP1/RN1Q1K1R b kq - 2 14")
-    move = next(move for move in board.legal_moves() if move.uci() == "e7e6")
-    child_key = position_repetition_key(board.apply(move))
-    position_history = (position_repetition_key(board), child_key, child_key)
+    state = parse_uci_position_state(
+        "position startpos moves "
+        "g1f3 g8f6 f3g1 f6g8 "
+        "g1f3 g8f6 f3g1 f6g8"
+    )
+    board = state.board
     probes = {
         probe.uci: probe
         for probe in probe_moves(
@@ -1915,12 +1916,12 @@ def test_threefold_repetition_gets_history_objection() -> None:
             search_backend="alphabeta",
             smt_mate=True,
             smt_fork=True,
-            position_history=position_history,
+            position_history=state.position_history,
         )
     }
 
-    assert "strategy:threefold_repetition:e7e6" in probes["e7e6"].objections
-    assert probes["e7e6"].score == 0
+    assert "strategy:threefold_repetition:g1f3" in probes["g1f3"].objections
+    assert probes["g1f3"].score == 0
 
     decision = DialecticalChessEngine(
         EngineSettings(
@@ -1930,11 +1931,11 @@ def test_threefold_repetition_gets_history_objection() -> None:
             search_backend="alphabeta",
             smt_mate=True,
             smt_fork=True,
-            position_history=position_history,
+            position_history=state.position_history,
         )
     ).choose_move(board)
 
-    assert decision.move_uci != "e7e6"
+    assert decision.move_uci != "g1f3"
 
 
 def test_malformed_search_refutation_label_is_ignored() -> None:
@@ -2526,7 +2527,6 @@ def test_checking_knight_fork_gets_en_pris_objection_when_queen_can_capture() ->
             search_backend="alphabeta",
             smt_mate=True,
             smt_fork=True,
-            recent_own_move="c6b4",
         )
     ).choose_move(board)
 

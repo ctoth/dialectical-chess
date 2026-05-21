@@ -57,16 +57,19 @@ def test_mate_in_one_on_one_hundredth_halfmove_scores_as_mate() -> None:
 
 
 def test_repetition_draw_move_is_not_scored_as_a_win() -> None:
-    board = OwnedBoard.from_fen("4k3/8/8/8/8/1q6/8/2N1K3 w - - 0 1")
-    move = next(move for move in board.legal_moves() if move.uci() == "c1b3")
-    child_key = position_repetition_key(board.apply(move))
-    position_history = (position_repetition_key(board), child_key, child_key)
+    state = parse_uci_position_state(
+        "position startpos moves "
+        "g1f3 g8f6 f3g1 f6g8 "
+        "g1f3 g8f6 f3g1 f6g8"
+    )
+    board = state.board
+    move = next(move for move in board.legal_moves() if move.uci() == "g1f3")
 
     search_result = root_search_result(
         board,
         move,
         settings=SearchSettings(depth=1),
-        position_history=position_history,
+        position_history=state.position_history,
     )
     probes = {
         probe.uci: probe
@@ -75,11 +78,11 @@ def test_repetition_draw_move_is_not_scored_as_a_win() -> None:
             smt_mate=False,
             smt_fork=False,
             reply_mate_scan=False,
-            position_history=position_history,
+            position_history=state.position_history,
         )
     }
 
     assert search_result is not None
     assert search_result.score == 0
-    assert probes["c1b3"].score == 0
-    assert "strategy:threefold_repetition:c1b3" in probes["c1b3"].objections
+    assert probes["g1f3"].score == 0
+    assert "strategy:threefold_repetition:g1f3" in probes["g1f3"].objections

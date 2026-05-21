@@ -41,7 +41,6 @@ class ProbeSettings:
     smt: SmtSettings = field(default_factory=SmtSettings)
     positional_reasons: bool = True
     reply_mate_scan: bool = True
-    recent_own_move: str | None = None
     position_history: tuple[str, ...] = ()
 
 
@@ -56,7 +55,6 @@ def probe_moves(
     positional_reasons: bool = True,
     reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
-    recent_own_move: str | None = None,
     position_history: tuple[str, ...] = (),
 ) -> list[MoveProbe]:
     settings = ProbeSettings(
@@ -66,7 +64,6 @@ def probe_moves(
         smt=SmtSettings(mate_in_one=smt_mate, fork=smt_fork),
         positional_reasons=positional_reasons,
         reply_mate_scan=reply_mate_scan,
-        recent_own_move=recent_own_move,
         position_history=position_history,
     )
     return probe_moves_with_settings(board, settings)

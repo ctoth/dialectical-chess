@@ -48,7 +48,6 @@ def test_engine_settings_are_plain_serializable(
             "max_defense_nodes": 5000,
             "min_defense_material": 300,
         },
-        "recent_own_move": None,
         "position_history": (),
     }
 
@@ -74,7 +73,7 @@ def test_engine_returns_null_decision_for_no_legal_moves() -> None:
     from dialectical_chess.engine import DialecticalChessEngine
     from dialectical_chess.probe import owned_board_from_fen
 
-    board = owned_board_from_fen("7k/5K2/6Q1/8/8/8/8/8 b - - 0 1")
+    board = owned_board_from_fen("7k/5KQ1/8/8/8/8/8/8 b - - 0 1")
 
     decision = DialecticalChessEngine().choose_move(board)
 
@@ -96,7 +95,7 @@ def test_uci_no_legal_move_position_survives_and_returns_null_move() -> None:
 
     output = StringIO()
     input_stream = StringIO(
-        "position fen 7k/5K2/6Q1/8/8/8/8/8 b - - 0 1\n"
+        "position fen 7k/5KQ1/8/8/8/8/8/8 b - - 0 1\n"
         "go\n"
         "quit\n"
     )
