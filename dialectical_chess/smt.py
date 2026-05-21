@@ -37,30 +37,12 @@ class ForkWitness:
 
 
 def smt_mate_in_one_moves(board: Any) -> frozenset[str]:
-    try:
-        from z3 import Bool, Or, Solver, is_true, sat
-    except ImportError:
-        return frozenset()
-
-    mate_moves: dict[str, Any] = {}
-    for move in board.legal_moves():
-        if owned_is_checkmate(board.apply(move)):
-            mate_moves[move.uci()] = Bool(f"mate_{move.uci()}")
-
-    if not mate_moves:
-        return frozenset()
-
-    solver = Solver()
-    solver.add(Or(*mate_moves.values()))
-    if solver.check() != sat:
-        return frozenset()
-    model = solver.model()
-    witnesses = {
-        move
-        for move, variable in mate_moves.items()
-        if is_true(model.eval(variable, model_completion=True))
-    }
-    return frozenset(move for move in witnesses if verifies_mate_in_one(board, move))
+    mate_moves = tuple(
+        move.uci()
+        for move in board.legal_moves()
+        if owned_is_checkmate(board.apply(move))
+    )
+    return frozenset(move for move in mate_moves if verifies_mate_in_one(board, move))
 
 
 def verifies_mate_in_one(board: Any, move_text: str) -> bool:
@@ -84,35 +66,13 @@ def smt_fork_witnesses(
     min_targets: int = 2,
     min_target_value: int = 500,
 ) -> dict[str, ForkWitness]:
-    try:
-        from z3 import And, Int, Or, Solver, sat
-    except ImportError:
-        return {}
-
     legal_moves = tuple(board.legal_moves())
-    candidates: list[tuple[int, Any, ForkWitness]] = []
-    for index, move in enumerate(legal_moves):
+    candidates: dict[str, ForkWitness] = {}
+    for move in legal_moves:
         witness = fork_witness_after(board, move)
         if witness.target_count >= min_targets and witness.target_value >= min_target_value:
-            candidates.append((index, move, witness))
-
-    if not candidates:
-        return {}
-
-    move_index = Int("fork_move_index")
-    solver = Solver()
-    solver.add(Or(*(move_index == index for index, _, _ in candidates)))
-    solver.add(
-        Or(
-            *(
-                And(move_index == index, witness.target_count >= min_targets, witness.target_value >= min_target_value)
-                for index, _, witness in candidates
-            )
-        )
-    )
-    if solver.check() != sat:
-        return {}
-    return {move.uci(): witness for _, move, witness in candidates}
+            candidates[move.uci()] = witness
+    return candidates
 
 
 def fork_witness_after(board: Any, move: Any) -> ForkWitness:
