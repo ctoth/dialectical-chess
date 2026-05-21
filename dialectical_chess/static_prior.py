@@ -1,4 +1,7 @@
-"""Disjoint static prior for Phase-2 opinion-valued move arguments."""
+"""Disjoint static prior for Phase-2 opinion-valued move arguments.
+
+Material balance uses ``OWNED_PIECE_VALUE``: P=100, N=320, B=330, R=500, Q=900.
+"""
 
 from __future__ import annotations
 

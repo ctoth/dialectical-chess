@@ -474,7 +474,12 @@ def is_undefended_reply_capture(label: str) -> bool:
 
 
 def is_defensible_reply_attack(label: str) -> bool:
-    return label.startswith("reply_captures_moved_piece:defended:")
+    return label.startswith(
+        (
+            "reply_captures_moved_piece:defended:",
+            "reply_mate:defended:",
+        )
+    )
 
 
 def argument_value_for(

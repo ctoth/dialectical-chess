@@ -54,7 +54,7 @@ def choose_move(probes: list[MoveProbe]) -> MoveProbe:
     return decision.selected
 
 
-def build_argument_payload(probes: list[MoveProbe], graph: Any | None = None) -> dict[str, Any]:
+def build_argument_payload(probes: list[MoveProbe]) -> dict[str, Any]:
     return {
         "move_scores": [probe_payload(probe) for probe in probes],
     }

@@ -544,6 +544,28 @@ def test_undefended_reply_mate_from_reply_attack_analyzer_is_hard_filtered() -> 
 
 
 @pytest.mark.differential
+def test_defended_reply_mate_is_suppressed_not_hard_filtered() -> None:
+    """m-2 — `reply_mate:defended:` is answered by its defense flag.
+
+    A defended reply mate is not a filter refutation, and its reply-attack
+    strength is fully suppressed before an objection leaf is built.
+    """
+    defended = make_probe(
+        "d1d8",
+        reply_attacks=("reply_mate:defended:a1a2",),
+    )
+    evidence = defended.reply_attack_evidence[0]
+    assert evidence.reply_attack_strength == 7
+    assert evidence.defense_strength == 13
+    assert not is_forced_mate_refutation(evidence)
+
+    artifacts = build_argumentation_artifacts([defended])
+    assert skeptical_survivors(artifacts) == {"d1d8"}
+    assert not artifacts.filter_af.defeats
+    assert all(not arg.startswith("objection:") for arg in artifacts.graph.graph.arguments)
+
+
+@pytest.mark.differential
 def test_filter_graph_contains_only_refute_to_move_edges() -> None:
     """§5b — `filter_af` is a pure-attack Dung framework: every defeat pair
     has a `refute:` attacker and a `move:` target. The forced-mate
@@ -693,6 +715,29 @@ def test_empty_survivors_when_every_move_hard_refuted() -> None:
     assert decision.empty_survivors is True
     # A lost position still yields a least-bad move — one of the inputs.
     assert decision.selected.uci in {"a1a2", "b1b2"}
+
+
+@pytest.mark.property
+def test_over_filtered_position_detected() -> None:
+    """§5d — a soft reply objection must not be silently hard-filtered.
+
+    This guard fails if a future predicate widening excludes a move that is not
+    proved lost by `is_forced_mate_refutation`.
+    """
+    soft_reply_objection = make_probe(
+        "a1a2",
+        reply_attacks=("reply_captures_moved_piece:undefended:a2a7:320",),
+    )
+    hard_refuted = make_probe(
+        "b1b2",
+        objections=("tactical:allows_reply_mate_in_one:b1b2:h8h1",),
+    )
+
+    artifacts = build_argumentation_artifacts([soft_reply_objection, hard_refuted])
+    survivors = skeptical_survivors(artifacts)
+    assert "a1a2" in survivors
+    assert "b1b2" not in survivors
+    assert all(target != "move:a1a2" for _attacker, target in artifacts.filter_af.defeats)
 
 
 @pytest.mark.unit

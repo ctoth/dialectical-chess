@@ -41,9 +41,13 @@ class MoveArgumentationArtifacts:
     """The single artifact consumed by the filter and decider."""
 
     graph: BipolarMoveGraph
-    move_arg: dict[str, str]
     filter_af: ArgumentationFramework
     evidence_trace: dict[str, list[ArgumentEvidence]]
+
+    @property
+    def move_arg(self) -> dict[str, str]:
+        """Return the single move-argument index owned by the graph artifact."""
+        return self.graph.move_arg
 
 
 def leaf_intrinsic(strength: int) -> Opinion:
@@ -133,7 +137,6 @@ def build_argumentation_artifacts(
     bmg = BipolarMoveGraph(graph=graph, move_arg=move_arg)
     return MoveArgumentationArtifacts(
         graph=bmg,
-        move_arg=move_arg,
         filter_af=filter_af,
         evidence_trace=evidence_trace,
     )

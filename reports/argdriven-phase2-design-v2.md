@@ -809,8 +809,8 @@ The move node's intrinsic is `Opinion.vacuous(squash(static_prior(probe)))` (§2
 evaluated on the post-move board:
 
 - **Material balance** — summed piece values of the side to move minus the
-  opponent, on the post-move board (`OWNED_PIECE_VALUE` scale: P=100, N=300,
-  B=300, R=500, Q=900).
+  opponent, on the post-move board (`OWNED_PIECE_VALUE` scale: P=100, N=320,
+  B=330, R=500, Q=900).
 - **Piece-square / activity** — a small positional term: central pawn presence,
   minor-piece development off the back rank, rook/queen on an open file, knight
   on a supported outpost, passed pawns. These mirror the *geometry* the
