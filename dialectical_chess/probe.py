@@ -1055,8 +1055,13 @@ def has_search_refutation_at_most(objections: list[str], threshold: int) -> bool
         if not objection.startswith("search_refutes:"):
             continue
         parts = objection.split(":")
-        if len(parts) == 3 and int(parts[2]) <= threshold:
-            return True
+        if len(parts) != 3:
+            continue
+        try:
+            if int(parts[2]) <= threshold:
+                return True
+        except ValueError:
+            continue
     return False
 
 

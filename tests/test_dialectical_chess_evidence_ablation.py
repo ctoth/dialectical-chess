@@ -36,6 +36,7 @@ from dialectical_chess.evidence import (  # noqa: E402
     to_argument_evidence,
 )
 from dialectical_chess.probe import owned_board_from_fen, probe_moves  # noqa: E402
+from dialectical_chess.probe import has_search_refutation_at_most  # noqa: E402
 from dialectical_chess.engine import EngineSettings  # noqa: E402
 from dialectical_chess.engine import DialecticalChessEngine  # noqa: E402
 from dialectical_chess.search import (  # noqa: E402
@@ -1934,6 +1935,10 @@ def test_threefold_repetition_gets_history_objection() -> None:
     ).choose_move(board)
 
     assert decision.move_uci != "e7e6"
+
+
+def test_malformed_search_refutation_label_is_ignored() -> None:
+    assert not has_search_refutation_at_most(["search_refutes:alphabeta:not-an-int"], -500)
 
 
 def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:

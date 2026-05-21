@@ -40,3 +40,17 @@ def test_double_pawn_push_en_passant_field_matches_python_chess(
     oracle = oracle_after(fen, moves)
 
     assert ep_field(owned.fen()) == ep_field(oracle.fen())
+
+
+def test_apply_checked_rejects_rook_through_pawn_move() -> None:
+    board = OwnedBoard.from_fen(START_FEN)
+
+    with pytest.raises(ValueError, match="illegal move: a1a5"):
+        board.apply_checked("a1a5")
+
+
+def test_apply_checked_rejects_move_into_check() -> None:
+    board = OwnedBoard.from_fen("3rk3/8/8/8/8/8/8/4K3 w - - 0 1")
+
+    with pytest.raises(ValueError, match="illegal move: e1d1"):
+        board.apply_checked("e1d1")

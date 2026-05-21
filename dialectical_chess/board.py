@@ -179,6 +179,7 @@ class OwnedBoard:
         raise ValueError(f"missing {color} king")
 
     def apply(self, move: OwnedMove | str) -> "OwnedBoard":
+        """Apply trusted, pseudo-legal input only."""
         move = OwnedMove.from_uci(move) if isinstance(move, str) else move
         piece = self.squares[move.from_square]
         if piece is None:
@@ -227,6 +228,14 @@ class OwnedBoard:
         halfmove = 0 if is_pawn or captured is not None else self.halfmove_clock + 1
         fullmove = self.fullmove_number + (1 if self.turn == "b" else 0)
         return OwnedBoard(tuple(board), opposite(self.turn), castling, ep_square, halfmove, fullmove)
+
+    def apply_checked(self, move: OwnedMove | str) -> "OwnedBoard":
+        move = OwnedMove.from_uci(move) if isinstance(move, str) else move
+        legal_by_uci = {legal_move.uci(): legal_move for legal_move in self.legal_moves()}
+        legal_move = legal_by_uci.get(move.uci())
+        if legal_move is None:
+            raise ValueError(f"illegal move: {move.uci()}")
+        return self.apply(legal_move)
 
     def _pawn_moves(self, index: int, piece: str, moves: list[OwnedMove]) -> None:
         color = piece_color(piece)
