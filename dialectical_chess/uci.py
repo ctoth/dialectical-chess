@@ -13,6 +13,8 @@ from dialectical_chess.search import ReplyAnalysisSettings
 
 UciSettings = EngineSettings
 
+CANDIDATE_REPLY_MATE_SCAN_MIN_BUDGET_MS = 2_000
+
 
 def run_uci(
     input_stream: TextIO,
@@ -195,6 +197,8 @@ def settings_for_go(settings: EngineSettings, board, command: str) -> EngineSett
             reply_mate_scan=False,
         )
     move_budget = estimated_move_budget_ms(limits)
+    if move_budget <= CANDIDATE_REPLY_MATE_SCAN_MIN_BUDGET_MS:
+        settings = replace(settings, reply_mate_scan=False)
     if remaining <= 6_000 or move_budget <= 300:
         return replace(
             settings,
