@@ -247,6 +247,10 @@ def parsed_int(text: str) -> int | None:
 def settings_for_go_request(settings: EngineSettings, board, request: GoRequest) -> tuple[EngineSettings, int | None]:
     if request.depth is not None:
         settings = replace(settings, search_depth=max(0, request.depth))
+    if request.infinite:
+        # An infinite search runs until `stop`: no budget, no deadline, even
+        # when a clock is present (`go infinite wtime ...` is legal UCI).
+        return replace(settings, deadline=None), None
     budget_ms = estimated_move_budget_ms(board.turn, request)
     if budget_ms is None or budget_ms <= 0:
         return settings, budget_ms

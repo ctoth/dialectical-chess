@@ -280,6 +280,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             probes,
             dialectic_depth=settings.dialectic_depth,
             search_depth=settings.search.depth,
+            deadline=settings.deadline,
         )
     return sorted(probes, key=lambda probe: (-probe.score, probe.uci))
 
@@ -722,10 +723,13 @@ def reply_forced_mate_objections(
     move: Any,
     *,
     mate_depth: int,
+    deadline: float | None = None,
 ) -> tuple[tuple[str, ...], int]:
     if owned_is_checkmate(child):
         return (), 0
-    if not has_forced_mate(chess.Board(child.fen()), mate_depth=mate_depth):
+    if not has_forced_mate(
+        chess.Board(child.fen()), mate_depth=mate_depth, deadline=deadline
+    ):
         return (), 0
     return (f"tactical:allows_reply_forced_mate_in_{mate_depth}:{move.uci()}",), -100_000
 
@@ -737,6 +741,7 @@ def scan_forced_reply_mates_for_candidate_moves(
     *,
     dialectic_depth: int,
     search_depth: int,
+    deadline: float | None = None,
 ) -> list[MoveProbe]:
     if search_depth not in {0, 1, 2}:
         return probes
@@ -758,6 +763,8 @@ def scan_forced_reply_mates_for_candidate_moves(
     scanned: set[str] = set()
     scan_budget = candidate_limit * 3 if search_depth == 1 else candidate_limit
     while len(scanned) < scan_budget:
+        if deadline is not None and time.monotonic() >= deadline:
+            break
         current_probes = [updated.get(probe.uci, probe) for probe in probes]
         made_progress = False
         remaining_budget = scan_budget - len(scanned)
@@ -772,6 +779,8 @@ def scan_forced_reply_mates_for_candidate_moves(
         ):
             if probe.uci in scanned:
                 continue
+            if deadline is not None and time.monotonic() >= deadline:
+                break
             scanned.add(probe.uci)
             made_progress = True
             move = move_by_uci[probe.uci]
@@ -792,6 +801,7 @@ def scan_forced_reply_mates_for_candidate_moves(
                     child,
                     move,
                     mate_depth=mate_depth,
+                    deadline=deadline,
                 )
                 if forced_mate_objections:
                     break

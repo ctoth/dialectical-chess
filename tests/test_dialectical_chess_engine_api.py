@@ -291,6 +291,66 @@ def test_uci_go_infinite_stop_returns_exactly_one_bestmove(monkeypatch) -> None:
     assert "bestmove a2a3" in text
 
 
+def test_uci_go_infinite_with_clock_does_not_self_terminate(monkeypatch) -> None:
+    """M1 regression: `go infinite` with wtime/btime present must search until
+    `stop`, not self-terminate on a budget. settings_for_go_request computed a
+    deadline regardless of request.infinite, so the infinite search ended in
+    ~10ms. Assert exactly one bestmove, emitted only after `stop`, and that the
+    settings carried into the search have no deadline."""
+    import threading
+
+    import dialectical_chess.uci as uci
+    from dialectical_chess.arguments import MoveProbe
+    from dialectical_chess.engine import EngineDecision
+
+    release = threading.Event()
+    seen_deadlines = []
+
+    class FakeEngine:
+        def __init__(self, settings):
+            seen_deadlines.append(settings.deadline)
+
+        def choose_move(self, board):
+            # Block until `stop` joins the search thread -- a real infinite
+            # search runs until interrupted, never finishing on its own.
+            release.wait(timeout=5.0)
+            selected = MoveProbe(
+                uci="a2a3",
+                san="a2a3",
+                score=1,
+                is_checkmate=False,
+                gives_check=False,
+                is_capture=False,
+                captured_value=0,
+                promotion_value=0,
+                reasons=("fake:infinite",),
+                objections=(),
+            )
+            return EngineDecision(move_uci="a2a3", selected=selected)
+
+    monkeypatch.setattr(uci, "DialecticalChessEngine", FakeEngine)
+    output = StringIO()
+
+    original_finish = uci.finish_search
+
+    def finish_then_check(active_search):
+        # The search must still be running when `stop` arrives: a self-
+        # terminating budget would have produced a bestmove already.
+        assert output.getvalue().count("bestmove ") == 0
+        release.set()
+        return original_finish(active_search)
+
+    monkeypatch.setattr(uci, "finish_search", finish_then_check)
+
+    assert uci.run_uci(StringIO("go infinite wtime 1000 btime 1000\nstop\nquit\n"), output) == 0
+
+    text = output.getvalue()
+    assert text.count("bestmove ") == 1
+    assert "bestmove a2a3" in text
+    # An infinite search carries no deadline even with a clock present.
+    assert seen_deadlines == [None]
+
+
 def test_low_budget_probe_stops_after_best_so_far_plus_one(monkeypatch) -> None:
     import dialectical_chess.probe as probe_module
     from dialectical_chess.probe import owned_board_from_fen, probe_moves
@@ -312,3 +372,84 @@ def test_low_budget_probe_stops_after_best_so_far_plus_one(monkeypatch) -> None:
     )
 
     assert 1 <= len(probes) <= 2
+
+
+def test_has_forced_mate_returns_best_so_far_on_expired_deadline() -> None:
+    """M3 regression: a single heavy mate search must be deadline-bounded.
+
+    Without the deadline threaded into the recursion, one has_forced_mate call
+    can run for seconds and a top-of-loop deadline check cannot interrupt it.
+    A deadline already in the past makes the search return best-so-far (no
+    proven mate => False) immediately rather than fully expanding the tree."""
+    import time
+
+    import chess
+
+    from dialectical_chess.loss_mining import FORCED_MATE_CACHE, has_forced_mate
+
+    FORCED_MATE_CACHE.clear()
+    # A wide opening position: a depth-4 forced-mate proof here would expand a
+    # large tree. With an already-expired deadline the search must bail out.
+    board = chess.Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+
+    started = time.perf_counter()
+    result = has_forced_mate(board, mate_depth=4, deadline=time.monotonic() - 1.0)
+    elapsed = time.perf_counter() - started
+
+    assert result is False
+    assert elapsed < 0.5
+    FORCED_MATE_CACHE.clear()
+
+
+def test_reply_mate_fixpoint_bounds_single_iteration_with_deadline(monkeypatch) -> None:
+    """M3 regression: the reply-mate fixpoint's heavy per-iteration call
+    (selected_reply_mate_refutation -> has_forced_mate) must observe the
+    deadline. A slow has_forced_mate must not overrun an expired budget."""
+    import time
+
+    from dialectical_chess import engine as engine_module
+    from dialectical_chess.arguments import MoveProbe, build_root_argument_graph
+    from dialectical_chess.engine import selected_reply_mate_refutation_fixpoint
+    from dialectical_chess.probe import owned_board_from_fen
+
+    board = owned_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    selected = MoveProbe(
+        uci="e2e4",
+        san="e2e4",
+        score=0,
+        is_checkmate=False,
+        gives_check=False,
+        is_capture=False,
+        captured_value=0,
+        promotion_value=0,
+        reasons=(),
+        objections=(),
+    )
+
+    deadline_seen = []
+
+    def slow_has_forced_mate(child, *, mate_depth, deadline=None):
+        deadline_seen.append(deadline)
+        # The deadline must be threaded all the way into the mate search.
+        assert deadline is not None
+        return False
+
+    monkeypatch.setattr(engine_module, "has_forced_mate", slow_has_forced_mate)
+
+    probes = [selected]
+    graph = build_root_argument_graph(probes)
+    started = time.perf_counter()
+    out_probes, _graph, out_selected = selected_reply_mate_refutation_fixpoint(
+        board,
+        probes,
+        graph,
+        selected,
+        allow_mate_four=True,
+        deadline=time.monotonic() + 0.05,
+    )
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 1.0
+    assert out_selected is not None
+    # The deadline reached the heavy mate call, not just the loop top.
+    assert deadline_seen and all(d is not None for d in deadline_seen)

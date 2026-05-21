@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import io
+import time
 from typing import Any, Hashable
 
 import chess
@@ -81,13 +82,26 @@ def has_immediate_mate(board: chess.Board) -> bool:
     return has_forced_mate(board, mate_depth=1)
 
 
-def has_forced_mate(board: Any, *, mate_depth: int) -> bool:
-    """Return whether the side to move can force mate within mate_depth moves."""
+def has_forced_mate(
+    board: Any,
+    *,
+    mate_depth: int,
+    deadline: float | None = None,
+) -> bool:
+    """Return whether the side to move can force mate within mate_depth moves.
+
+    When ``deadline`` (a ``time.monotonic()`` value) is supplied and elapses
+    mid-search, the search returns its best answer so far: a forced mate is
+    reported only when actually proven, so on expiry an unproven branch is
+    treated as "no forced mate" -- the safe, non-hanging answer (M3).
+    """
     if mate_depth < 1:
         raise ValueError("mate_depth must be at least 1")
     if not isinstance(board, chess.Board):
         board = chess.Board(board.fen())
-    return _has_forced_mate_board(board, mate_depth, cache=FORCED_MATE_CACHE)
+    return _has_forced_mate_board(
+        board, mate_depth, cache=FORCED_MATE_CACHE, deadline=deadline
+    )
 
 
 def _has_forced_mate_board(
@@ -95,6 +109,7 @@ def _has_forced_mate_board(
     mate_depth: int,
     *,
     cache: dict[tuple[Hashable, int], bool],
+    deadline: float | None = None,
 ) -> bool:
     cache_key = (position_key(board), mate_depth)
     if cache_key in cache:
@@ -104,6 +119,11 @@ def _has_forced_mate_board(
         return True
 
     for move in board.legal_moves:
+        if deadline is not None and time.monotonic() >= deadline:
+            # Budget spent inside this single call: return best-so-far. No
+            # proven mate was found, so the safe answer is False; do not cache
+            # an unfinished search.
+            return False
         attacker_child = board.copy(stack=False)
         attacker_child.push(move)
         if attacker_child.is_checkmate():
@@ -119,6 +139,7 @@ def _has_forced_mate_board(
                 defender_child(attacker_child, reply),
                 mate_depth - 1,
                 cache=cache,
+                deadline=deadline,
             )
             for reply in defender_replies
         ):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -109,16 +110,14 @@ def selected_reply_mate_refutation_fixpoint(
         return probes, graph, selected
     refuted: set[str] = set()
     while selected is not None and selected.uci not in refuted:
-        if deadline is not None:
-            import time
-
-            if time.monotonic() >= deadline:
-                break
+        if deadline is not None and time.monotonic() >= deadline:
+            break
         objection = selected_reply_mate_refutation(
             board,
             move_by_uci,
             selected,
             mate_depths=selected_reply_mate_depths(selected, allow_mate_four=allow_mate_four),
+            deadline=deadline,
         )
         if objection is None:
             break
@@ -167,6 +166,7 @@ def selected_reply_mate_refutation(
     selected: MoveProbe,
     *,
     mate_depths: tuple[int, ...],
+    deadline: float | None = None,
 ) -> str | None:
     if selected.is_checkmate:
         return None
@@ -177,6 +177,8 @@ def selected_reply_mate_refutation(
         return None
     child = board.apply(move)
     for mate_depth in mate_depths:
-        if has_forced_mate(child, mate_depth=mate_depth):
+        if deadline is not None and time.monotonic() >= deadline:
+            break
+        if has_forced_mate(child, mate_depth=mate_depth, deadline=deadline):
             return f"tactical:allows_reply_forced_mate_in_{mate_depth}:{selected.uci}"
     return None
