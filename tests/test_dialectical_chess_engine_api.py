@@ -81,6 +81,29 @@ def test_engine_returns_null_decision_for_no_legal_moves() -> None:
     assert decision.selected is None
 
 
+def test_choose_move_raises_value_error_for_empty_probe_list() -> None:
+    import pytest
+
+    from dialectical_chess.arguments import choose_move
+
+    with pytest.raises(ValueError, match="position has no legal moves"):
+        choose_move([], None)
+
+
+def test_uci_no_legal_move_position_survives_and_returns_null_move() -> None:
+    from dialectical_chess.uci import run_uci
+
+    output = StringIO()
+    input_stream = StringIO(
+        "position fen 7k/5K2/6Q1/8/8/8/8/8 b - - 0 1\n"
+        "go\n"
+        "quit\n"
+    )
+
+    assert run_uci(input_stream, output) == 0
+    assert "bestmove 0000" in output.getvalue()
+
+
 def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
     import dialectical_chess.bench as bench
     from dialectical_chess.arguments import MoveProbe

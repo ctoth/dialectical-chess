@@ -81,7 +81,7 @@ def choose_move(
     selector_mode: str = "argument",
 ) -> MoveProbe:
     if not probes:
-        raise SystemExit("position has no legal moves")
+        raise ValueError("position has no legal moves")
     if selector_mode not in SELECTOR_MODES:
         raise ValueError(f"unknown selector_mode: {selector_mode}")
     graph = graph or build_root_argument_graph(probes)
