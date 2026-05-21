@@ -33,6 +33,7 @@ class EngineSettings:
     reply_mate_scan: bool = True
     reply_analysis: ReplyAnalysisSettings = ReplyAnalysisSettings()
     position_history: tuple[str, ...] = ()
+    deadline: float | None = None
 
     def __post_init__(self) -> None:
         if self.selector_mode not in SELECTOR_MODES:
@@ -76,6 +77,7 @@ class DialecticalChessEngine:
                 reply_mate_scan=self.settings.reply_mate_scan,
                 reply_analysis=self.settings.reply_analysis,
                 position_history=self.settings.position_history,
+                deadline=self.settings.deadline,
             )
         )
         graph = build_root_argument_graph(probes)
@@ -88,6 +90,7 @@ class DialecticalChessEngine:
             selected,
             allow_mate_four=self.settings.reply_mate_scan,
             selector_mode=self.settings.selector_mode,
+            deadline=self.settings.deadline,
         )
         decision = EngineDecision(
             move_uci="0000" if selected is None else selected.uci,
@@ -107,12 +110,18 @@ def selected_reply_mate_refutation_fixpoint(
     *,
     allow_mate_four: bool,
     selector_mode: str,
+    deadline: float | None = None,
 ) -> tuple[list[MoveProbe], RootArgumentGraph, MoveProbe | None]:
     move_by_uci = {move.uci(): move for move in board.legal_moves()}
     if not allow_mate_four and len(move_by_uci) > SELECTED_REPLY_MATE_LOW_CLOCK_LEGAL_LIMIT:
         return probes, graph, selected
     refuted: set[str] = set()
     while selected is not None and selected.uci not in refuted:
+        if deadline is not None:
+            import time
+
+            if time.monotonic() >= deadline:
+                break
         objection = selected_reply_mate_refutation(
             board,
             move_by_uci,

@@ -69,13 +69,13 @@ def test_critical_clock_disables_expensive_dialectical_evidence() -> None:
     pytest.importorskip("chess")
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
+    from dialectical_chess.uci import parse_go, settings_for_go_request
 
     board = owned_board_from_fen("2b1kbnr/1p1p1ppp/4p3/4P3/2q5/6P1/1r1K3P/R2Q3R w k - 7 27")
-    settings = settings_for_go(
+    settings, _budget_ms = settings_for_go_request(
         EngineSettings(search_depth=1, smt_mate=True, smt_fork=True, positional_reasons=True, reply_mate_scan=True),
         board,
-        "go wtime 1000 btime 1000",
+        parse_go("go wtime 1000 btime 1000".split()),
     )
 
     assert settings.search_depth == 0

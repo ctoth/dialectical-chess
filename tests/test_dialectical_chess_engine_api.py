@@ -49,6 +49,7 @@ def test_engine_settings_are_plain_serializable(
             "min_defense_material": 300,
         },
         "position_history": (),
+        "deadline": None,
     }
 
 
@@ -182,149 +183,112 @@ def test_uci_adapter_scores_through_engine(monkeypatch) -> None:
     assert "info string optimizer_status=optimal" in output.getvalue()
 
 
-def test_uci_go_uses_lower_depth_when_clock_is_low() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
+def test_uci_go_movetime_returns_within_budget_tolerance() -> None:
+    import time
 
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
+    from dialectical_chess.uci import run_uci
 
-    adjusted = settings_for_go(settings, board, "go wtime 4500 btime 9000 winc 100 binc 100")
-
-    assert adjusted.search_depth == 1
-    assert adjusted.dialectic_depth == 0
-    assert adjusted.search_backend == "alphabeta"
-    assert not adjusted.reply_mate_scan
-
-
-def test_uci_go_keeps_depth_when_fast_clock_is_playable() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
-
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
-
-    adjusted = settings_for_go(settings, board, "go wtime 10000 btime 30000 winc 100 binc 100")
-
-    assert adjusted.search_depth == 2
-    assert adjusted.dialectic_depth == 1
-    assert not adjusted.reply_mate_scan
-
-
-def test_uci_go_keeps_depth_at_twenty_five_seconds() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
-
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
-
-    adjusted = settings_for_go(settings, board, "go wtime 25000 btime 30000 winc 200 binc 200")
-
-    assert adjusted.search_depth == 2
-    assert adjusted.dialectic_depth == 1
-    assert not adjusted.reply_mate_scan
-
-
-def test_uci_go_uses_depth_one_when_clock_is_short() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
-
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
-
-    adjusted = settings_for_go(settings, board, "go wtime 5500 btime 30000 winc 100 binc 100")
-
-    assert adjusted.search_depth == 1
-    assert adjusted.dialectic_depth == 0
-    assert adjusted.search_backend == "alphabeta"
-    assert not adjusted.reply_mate_scan
-
-
-def test_uci_go_disables_reply_work_when_clock_is_critical() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
-
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
-
-    adjusted = settings_for_go(settings, board, "go wtime 2400 btime 30000 winc 100 binc 100")
-
-    assert adjusted.search_depth == 0
-    assert adjusted.dialectic_depth == 0
-    assert adjusted.search_backend == "alphabeta"
-    assert not adjusted.smt_mate
-    assert not adjusted.smt_fork
-    assert not adjusted.positional_reasons
-    assert not adjusted.reply_mate_scan
-
-
-def test_critical_clock_profile_rejects_selected_forced_mate() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import choose_uci_move, settings_for_go
-
-    board = owned_board_from_fen("2b2k2/p2n1prp/1rNp2p1/8/4P2P/3B1PP1/P1P1K1q1/8 w - - 1 26")
-    settings = settings_for_go(
-        EngineSettings(search_depth=2, search_backend="alphabeta"),
-        board,
-        "go wtime 2400 btime 30000 winc 100 binc 100",
+    output = StringIO()
+    input_stream = StringIO(
+        "position fen 7k/6pp/8/8/8/8/6PP/R5K1 w - - 0 1\n"
+        "go movetime 200\n"
+        "quit\n"
     )
 
-    assert settings.search_depth == 0
-    assert not settings.reply_mate_scan
-    assert choose_uci_move(board, settings=settings) == "e2e3"
+    started = time.perf_counter()
+    assert run_uci(input_stream, output) == 0
+
+    assert time.perf_counter() - started < 0.5
+    assert output.getvalue().count("bestmove ") == 1
 
 
-def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(monkeypatch) -> None:
-    from dialectical_chess import engine as engine_module
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import choose_uci_move, settings_for_go
+def test_uci_go_depth_is_honored(monkeypatch) -> None:
+    import dialectical_chess.uci as uci
+    from dialectical_chess.arguments import MoveProbe
+    from dialectical_chess.engine import EngineDecision
 
-    def reject_unbounded_mate_search(*args, **kwargs) -> bool:
-        raise AssertionError("critical profile should not run selected forced-mate proof in wide positions")
+    seen_depths = []
 
-    monkeypatch.setattr(engine_module, "has_forced_mate", reject_unbounded_mate_search)
-    board = owned_board_from_fen("1rb1kr2/pp1p2pp/2nQ2n1/b5B1/5p2/2P2N2/PPK2P1P/R4B1R b - - 3 25")
-    settings = settings_for_go(
-        EngineSettings(search_depth=2, search_backend="alphabeta"),
+    class FakeEngine:
+        def __init__(self, settings):
+            seen_depths.append(settings.search_depth)
+
+        def choose_move(self, board):
+            selected = MoveProbe(
+                uci="a2a3",
+                san="a2a3",
+                score=1,
+                is_checkmate=False,
+                gives_check=False,
+                is_capture=False,
+                captured_value=0,
+                promotion_value=0,
+                reasons=("fake:depth",),
+                objections=(),
+            )
+            return EngineDecision(move_uci="a2a3", selected=selected)
+
+    monkeypatch.setattr(uci, "DialecticalChessEngine", FakeEngine)
+    output = StringIO()
+
+    assert uci.run_uci(StringIO("go depth 2\nquit\n"), output) == 0
+
+    assert seen_depths == [2]
+    assert output.getvalue().count("bestmove ") == 1
+
+
+def test_uci_go_infinite_stop_returns_exactly_one_bestmove(monkeypatch) -> None:
+    import dialectical_chess.uci as uci
+    from dialectical_chess.arguments import MoveProbe
+    from dialectical_chess.engine import EngineDecision
+
+    class FakeEngine:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def choose_move(self, board):
+            selected = MoveProbe(
+                uci="a2a3",
+                san="a2a3",
+                score=1,
+                is_checkmate=False,
+                gives_check=False,
+                is_capture=False,
+                captured_value=0,
+                promotion_value=0,
+                reasons=("fake:infinite",),
+                objections=(),
+            )
+            return EngineDecision(move_uci="a2a3", selected=selected)
+
+    monkeypatch.setattr(uci, "DialecticalChessEngine", FakeEngine)
+    output = StringIO()
+
+    assert uci.run_uci(StringIO("go infinite\nstop\nquit\n"), output) == 0
+
+    text = output.getvalue()
+    assert text.count("bestmove ") == 1
+    assert "bestmove a2a3" in text
+
+
+def test_low_budget_probe_stops_after_best_so_far_plus_one(monkeypatch) -> None:
+    import dialectical_chess.probe as probe_module
+    from dialectical_chess.probe import owned_board_from_fen, probe_moves
+
+    ticks = iter((0.0, 1.0, 2.0, 3.0))
+
+    monkeypatch.setattr(probe_module.time, "monotonic", lambda: next(ticks, 3.0))
+
+    board = owned_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    probes = probe_moves(
         board,
-        "go btime 2400 wtime 30000 binc 100 winc 100",
+        dialectic_depth=0,
+        search_depth=0,
+        smt_mate=False,
+        smt_fork=False,
+        positional_reasons=False,
+        reply_mate_scan=False,
+        deadline=0.5,
     )
 
-    assert settings.search_depth == 0
-    assert not settings.reply_mate_scan
-    assert choose_uci_move(board, settings=settings) != "0000"
-
-
-def test_uci_go_uses_lower_depth_when_clock_is_middling() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
-
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
-
-    adjusted = settings_for_go(settings, board, "go wtime 15000 btime 30000 winc 200 binc 200")
-
-    assert adjusted.search_depth == 2
-    assert adjusted.dialectic_depth == 1
-    assert not adjusted.reply_mate_scan
-
-
-def test_uci_go_keeps_depth_when_clock_is_healthy() -> None:
-    from dialectical_chess.engine import EngineSettings
-    from dialectical_chess.probe import owned_board_from_fen
-    from dialectical_chess.uci import settings_for_go
-
-    board = owned_board_from_fen("rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
-    settings = EngineSettings(search_depth=2, search_backend="alphabeta")
-
-    adjusted = settings_for_go(settings, board, "go wtime 90000 btime 90000 winc 200 binc 200")
-
-    assert adjusted is settings
+    assert 1 <= len(probes) <= 2

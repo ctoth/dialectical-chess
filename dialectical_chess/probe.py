@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -42,6 +43,7 @@ class ProbeSettings:
     positional_reasons: bool = True
     reply_mate_scan: bool = True
     position_history: tuple[str, ...] = ()
+    deadline: float | None = None
 
 
 def probe_moves(
@@ -56,6 +58,7 @@ def probe_moves(
     reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
     position_history: tuple[str, ...] = (),
+    deadline: float | None = None,
 ) -> list[MoveProbe]:
     settings = ProbeSettings(
         dialectic_depth=dialectic_depth,
@@ -65,6 +68,7 @@ def probe_moves(
         positional_reasons=positional_reasons,
         reply_mate_scan=reply_mate_scan,
         position_history=position_history,
+        deadline=deadline,
     )
     return probe_moves_with_settings(board, settings)
 
@@ -84,6 +88,8 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
     reply_cache = ReplyAnalysisCache()
     probes = []
     for move in legal_moves:
+        if probes and settings.deadline is not None and time.monotonic() >= settings.deadline:
+            break
         san = move.uci()
         is_capture = owned_is_capture(board, move)
         captured_value = owned_capture_value(board, move)
