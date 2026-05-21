@@ -40,7 +40,6 @@ class MoveProbe:
     search_score: int | None = None
     search_line: tuple[str, ...] = ()
     smt_witnesses: tuple[str, ...] = ()
-    optimizer_trace: dict[str, Any] = field(default_factory=dict)
     reason_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)
     objection_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)
     reply_attack_evidence: tuple[ArgumentEvidence, ...] = field(init=False, repr=False, compare=False)

@@ -422,7 +422,6 @@ def tactical_witness_snapshot(result: dict[str, Any]) -> dict[str, Any]:
             for reason in result.get("reasons", []) + result.get("objections", [])
             if reason.startswith(("search:", "search_support:", "search_refutes:", "search_line:"))
         ],
-        "optimizer_trace": result.get("optimizer_trace", {}),
         "elapsed_ms": result.get("elapsed_ms"),
     }
 
@@ -462,7 +461,6 @@ def positional_snapshot(result: dict[str, Any]) -> dict[str, Any]:
         "search_score": result.get("search_score"),
         "search_line": result.get("search_line", []),
         "smt_witnesses": result.get("smt_witnesses", []),
-        "optimizer_trace": result.get("optimizer_trace", {}),
         "elapsed_ms": result.get("elapsed_ms"),
     }
 
@@ -778,7 +776,6 @@ def score_board(
         "search_score": None if selected is None else selected.search_score,
         "search_line": [] if selected is None else list(selected.search_line),
         "smt_witnesses": [] if selected is None else list(selected.smt_witnesses),
-        "optimizer_trace": {} if selected is None else dict(selected.optimizer_trace),
         "elapsed_ms": elapsed_ms,
     }
 
