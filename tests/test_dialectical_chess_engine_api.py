@@ -199,7 +199,18 @@ def test_uci_go_movetime_returns_within_budget_tolerance() -> None:
 def test_critical_clock_profile_rejects_selected_forced_mate() -> None:
     """M4 restored behaviour test (ported to parse_go / settings_for_go_request):
     under a critical-clock budget the real engine still selects the sound move
-    e2e3. Pins the rewritten time-control profile's move selection."""
+    e2e3 -- the alternative e2e1 allows a reply forced mate in 2. Pins the
+    rewritten time-control profile's move selection.
+
+    The move-selection assertion drops the wall-clock `deadline` that
+    settings_for_go_request stamps in: the budget is set at parse time, so a
+    loaded machine could let it expire mid-probe and the deadline-bounded
+    reply-mate search (M3) would then miss the refuting objection. That
+    deadline-expiry behaviour is M3's own concern, covered separately by
+    test_has_forced_mate_returns_best_so_far_on_expired_deadline. This test
+    pins the *profile's decision*, which must be deterministic."""
+    from dataclasses import replace
+
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
     from dialectical_chess.uci import choose_uci_move, parse_go, settings_for_go_request
@@ -218,7 +229,7 @@ def test_critical_clock_profile_rejects_selected_forced_mate() -> None:
     assert settings.dialectic_depth == 0
     assert not settings.reply_mate_scan
     assert not settings.positional_reasons
-    assert choose_uci_move(board, settings=settings) == "e2e3"
+    assert choose_uci_move(board, settings=replace(settings, deadline=None)) == "e2e3"
 
 
 def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(monkeypatch) -> None:
@@ -229,6 +240,8 @@ def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(mo
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
     from dialectical_chess.uci import choose_uci_move, parse_go, settings_for_go_request
+
+    from dataclasses import replace
 
     def reject_unbounded_mate_search(*args, **kwargs) -> bool:
         raise AssertionError(
@@ -247,7 +260,7 @@ def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(mo
     assert budget_ms is not None and budget_ms <= 100
     assert settings.search_depth == 0
     assert not settings.reply_mate_scan
-    assert choose_uci_move(board, settings=settings) != "0000"
+    assert choose_uci_move(board, settings=replace(settings, deadline=None)) != "0000"
 
 
 def test_uci_go_low_clock_budget_zero_returns_legal_bestmove() -> None:
