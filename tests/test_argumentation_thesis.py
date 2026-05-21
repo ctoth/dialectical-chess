@@ -512,6 +512,38 @@ def test_skeptical_filter_removes_forced_mate_refuted_move() -> None:
 
 
 @pytest.mark.differential
+def test_undefended_reply_mate_from_reply_attack_analyzer_is_hard_filtered() -> None:
+    """§5b / M-1 — an undefended reply mate found only by the reply-attack
+    analyzer is a hard refutation, not a soft objection.
+
+    The candidate has no `tactical:allows_reply_mate_in_one:` objection. Its
+    only mate fact is `reply_mate:undefended:...`, the label family emitted by
+    bounded reply-attack analysis at depths where the reply-mate objection scan
+    can be skipped. The filter must exclude it before expectation ranking.
+    """
+    into_mate = make_probe(
+        "d1d8",
+        reasons=("material:capture:900", "material:capture:500"),
+        reply_attacks=("reply_mate:undefended:a1a2",),
+    )
+    sound = make_probe("g1f3")
+
+    assert into_mate.objection_evidence == ()
+    assert [ev.label for ev in into_mate.reply_attack_evidence] == [
+        "reply_mate:undefended:a1a2"
+    ]
+
+    artifacts = build_argumentation_artifacts([into_mate, sound])
+    survivors = skeptical_survivors(artifacts)
+    assert "d1d8" not in survivors
+    assert "g1f3" in survivors
+
+    decision = choose_move_argumentation([into_mate, sound])
+    assert decision.selected.uci != "d1d8"
+    assert decision.empty_survivors is False
+
+
+@pytest.mark.differential
 def test_filter_graph_contains_only_refute_to_move_edges() -> None:
     """§5b — `filter_af` is a pure-attack Dung framework: every defeat pair
     has a `refute:` attacker and a `move:` target. The forced-mate

@@ -428,6 +428,8 @@ def forced_mate_depth(label: str) -> int | None:
 def is_forced_mate_refutation(evidence: ArgumentEvidence) -> bool:
     if evidence.search_refutation_score is not None:
         return evidence.search_refutation_score <= -100_000
+    if evidence.label.startswith("reply_mate:undefended:"):
+        return True
     return evidence.objection_kind in {
         ObjectionKind.REPLY_MATE_IN_ONE,
         ObjectionKind.REPLY_FORCED_MATE,
