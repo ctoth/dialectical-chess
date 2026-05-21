@@ -87,7 +87,7 @@ def test_choose_move_raises_value_error_for_empty_probe_list() -> None:
     from dialectical_chess.arguments import choose_move
 
     with pytest.raises(ValueError, match="position has no legal moves"):
-        choose_move([], None)
+        choose_move([])
 
 
 def test_uci_no_legal_move_position_survives_and_returns_null_move() -> None:
@@ -475,7 +475,7 @@ def test_reply_mate_fixpoint_bounds_single_iteration_with_deadline(monkeypatch) 
     import time
 
     from dialectical_chess import engine as engine_module
-    from dialectical_chess.arguments import MoveProbe, build_root_argument_graph
+    from dialectical_chess.arguments import MoveProbe
     from dialectical_chess.engine import selected_reply_mate_refutation_fixpoint
     from dialectical_chess.probe import owned_board_from_fen
 
@@ -504,12 +504,10 @@ def test_reply_mate_fixpoint_bounds_single_iteration_with_deadline(monkeypatch) 
     monkeypatch.setattr(engine_module, "has_forced_mate", slow_has_forced_mate)
 
     probes = [selected]
-    graph = build_root_argument_graph(probes)
     started = time.perf_counter()
-    out_probes, _graph, out_selected = selected_reply_mate_refutation_fixpoint(
+    out_probes, out_selected = selected_reply_mate_refutation_fixpoint(
         board,
         probes,
-        graph,
         selected,
         allow_mate_four=True,
         deadline=time.monotonic() + 0.05,

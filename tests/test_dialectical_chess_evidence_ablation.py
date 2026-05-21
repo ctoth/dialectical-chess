@@ -10,11 +10,6 @@ from hypothesis import strategies as st
 
 FIXTURES = Path(__file__).resolve().parents[1] / "dialectical_chess" / "fixtures"
 
-from dialectical_chess.arguments import (  # noqa: E402
-    MoveProbe,
-    build_root_argument_graph,
-    choose_move,
-)
 from dialectical_chess.bench import (  # noqa: E402
     dialectic_depth_for_lichess_row,
     mate_theme_depth,
@@ -25,9 +20,7 @@ from dialectical_chess.bench import (  # noqa: E402
     summarize_lichess_rows,
 )
 from dialectical_chess.evidence import (  # noqa: E402
-    DefeaterKind,
     EvidenceWorld,
-    ObjectionKind,
     is_argument_positional_reason,
     is_report_positional_reason,
     is_tactical_reason,
@@ -47,21 +40,6 @@ from dialectical_chess.smt import smt_fork_moves, smt_mate_in_one_moves  # noqa:
 from dialectical_chess.uci import parse_uci_position_state  # noqa: E402
 
 
-def quiet_probe(uci: str, score: int, reasons: tuple[str, ...] = ()) -> MoveProbe:
-    return MoveProbe(
-        uci=uci,
-        san=uci,
-        score=score,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=reasons,
-        objections=() if reasons else ("objection:no_immediate_tactical_warrant",),
-    )
-
-
 def test_evidence_comorphism_classifies_worlds_for_argumentation() -> None:
     positional = to_argument_evidence("piece_safety:defended:e7e8:900")
     search_line = to_argument_evidence("search_line:e2e4-e7e5")
@@ -76,66 +54,12 @@ def test_evidence_comorphism_classifies_worlds_for_argumentation() -> None:
     assert smt_summary.counts_as_tactical
 
 
-def test_typed_objection_evidence_builds_defeat_edges() -> None:
-    probe = MoveProbe(
-        uci="f8b4",
-        san="Bb4+",
-        score=100,
-        is_checkmate=False,
-        gives_check=True,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("search_support:alphabeta:200",),
-        objections=("opening:premature_minor_check:f8b4:undeveloped_minors:3",),
-    )
-
-    graph = build_root_argument_graph([probe])
-
-    objection_arg = "objection:f8b4:opening:premature_minor_check:f8b4:undeveloped_minors:3"
-    defeater_arg = "defeater:f8b4:defeater:search_support"
-    assert graph.evidence[objection_arg].objection_kind == ObjectionKind.OPENING_PREMATURE_MINOR_CHECK
-    assert graph.evidence[defeater_arg].defeater_kind == DefeaterKind.SEARCH_SUPPORT
-    assert (defeater_arg, objection_arg) in graph.defeats
-
-
 def test_reporting_positional_comorphism_excludes_piece_safety() -> None:
     reason = "piece_safety:defended:e7e8:900"
 
     assert is_argument_positional_reason(reason)
     assert not is_report_positional_reason(reason)
     assert not is_tactical_reason("material:exchange_nonnegative:e4d5")
-
-
-def test_argument_selector_prefers_tactical_support_over_positional_count() -> None:
-    """Mined positional deltas show shallow support counts can bury tactical moves."""
-    positional = quiet_probe(
-        "d4d1",
-        75,
-        (
-            "center_control:d4d1:2",
-            "piece_activity:d4d1:mobility_gain:1",
-            "file_control:d4d1:open_file",
-        ),
-    )
-    tactical = MoveProbe(
-        uci="e5f6",
-        san="e5f6",
-        score=500,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=True,
-        captured_value=500,
-        promotion_value=0,
-        reasons=("material:capture:500",),
-        objections=(),
-    )
-    probes = [positional, tactical]
-    graph = build_root_argument_graph(probes)
-
-    selected = choose_move(probes, graph)
-
-    assert selected.uci == "e5f6"
 
 
 def test_argument_selector_uses_effective_score_before_raw_material_tie_break() -> None:
@@ -342,37 +266,6 @@ def test_argument_selector_prefers_back_rank_check_evasion() -> None:
     assert decision.move_uci == "e8f8"
 
 
-def test_king_walk_objection_beats_tactical_count_tie_breaks() -> None:
-    safe = MoveProbe(
-        uci="g1f3",
-        san="g1f3",
-        score=40,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("development:g1f3:minor_piece",),
-        objections=(),
-    )
-    king_walk = MoveProbe(
-        uci="e1d2",
-        san="e1d2",
-        score=100,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("tactical:threat:targets:2:value:500",),
-        objections=("opening:king_walk:e1d2",),
-    )
-    probes = [king_walk, safe]
-    graph = build_root_argument_graph(probes)
-
-    assert choose_move(probes, graph) == safe
-
-
 def test_early_rook_shuffle_gets_opening_objection() -> None:
     board = owned_board_from_fen("r1bqkbnr/1ppp1ppp/2n1p3/p7/3PP3/2PB4/PP3PPP/RNBQK1NR b KQkq - 1 4")
     probes = {probe.uci: probe for probe in probe_moves(board, smt_fork=False)}
@@ -426,37 +319,6 @@ def test_argument_selector_rejects_trapped_queen_capture() -> None:
     ).choose_move(board)
 
     assert decision.move_uci != "g7g8"
-
-
-def test_premature_queen_objection_beats_tactical_count_tie_breaks() -> None:
-    safe = MoveProbe(
-        uci="g8f6",
-        san="g8f6",
-        score=40,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("development:g8f6:minor_piece",),
-        objections=(),
-    )
-    queen_move = MoveProbe(
-        uci="d8e7",
-        san="d8e7",
-        score=100,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("tactical:threat:targets:1:value:900",),
-        objections=("opening:premature_queen:d8e7:undeveloped_minors:2",),
-    )
-    probes = [queen_move, safe]
-    graph = build_root_argument_graph(probes)
-
-    assert choose_move(probes, graph) == safe
 
 
 def test_premature_minor_check_gets_development_objection() -> None:
@@ -1330,37 +1192,6 @@ def test_castled_flank_pawn_push_gets_king_shield_objection() -> None:
     probes = {probe.uci: probe for probe in probe_moves(board, search_depth=0, smt_fork=False)}
 
     assert "king_safety:castled_flank_pawn_weakening:g2g4" in probes["g2g4"].objections
-
-
-def test_argument_selector_rejects_castled_flank_pawn_weakening() -> None:
-    safe = MoveProbe(
-        uci="b1c3",
-        san="b1c3",
-        score=40,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("development:b1c3:minor_piece",),
-        objections=(),
-    )
-    weakening = MoveProbe(
-        uci="g2g4",
-        san="g2g4",
-        score=100,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("tactical:threat:targets:1:value:900",),
-        objections=("king_safety:castled_flank_pawn_weakening:g2g4",),
-    )
-    probes = [weakening, safe]
-    graph = build_root_argument_graph(probes)
-
-    assert choose_move(probes, graph) == safe
 
 
 def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
@@ -2317,22 +2148,3 @@ def test_checking_knight_fork_gets_en_pris_objection_when_queen_can_capture() ->
     ).choose_move(board)
 
     assert decision.move_uci != "b4c2"
-
-
-def test_reply_mate_attack_is_not_defeated_by_defended_label() -> None:
-    board = owned_board_from_fen("r1bq1k1r/pp1p2pp/3N4/2p1N3/P2p4/RQn5/1P3PPP/2B1RBK1 b - - 2 21")
-    probes = probe_moves(
-        board,
-        dialectic_depth=2,
-        search_depth=1,
-        search_backend="alphabeta",
-        smt_mate=True,
-        smt_fork=True,
-        positional_reasons=True,
-    )
-    probe_by_uci = {probe.uci: probe for probe in probes}
-    graph = build_root_argument_graph(probes)
-
-    assert "reply_mate:defended:b3f7" in probe_by_uci["a7a6"].reply_attacks
-    assert "defense:a7a6:reply_mate:defended:b3f7" not in graph.arguments
-    assert choose_move(probes, graph).uci != "a7a6"

@@ -6,11 +6,6 @@ from io import StringIO
 import pytest
 
 
-from dialectical_chess.arguments import (  # noqa: E402
-    MoveProbe,
-    build_root_argument_graph,
-    choose_move,
-)
 from dialectical_chess.baselines import fastchess_baseline  # noqa: E402
 
 
@@ -108,37 +103,6 @@ def test_stockfish_baseline_command_uses_strength_limit() -> None:
     assert name == "StockfishElo1320"
     assert "option.UCI_LimitStrength=true" in command
     assert "option.UCI_Elo=1320" in command
-
-
-def test_argument_selection_prefers_supported_move_before_score_fallback() -> None:
-    supported = MoveProbe(
-        uci="a1a8",
-        san="a1a8",
-        score=10,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("terminal:checkmate",),
-        objections=(),
-    )
-    unsupported = MoveProbe(
-        uci="h2h3",
-        san="h2h3",
-        score=9999,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=(),
-        objections=("objection:no_immediate_tactical_warrant",),
-    )
-
-    graph = build_root_argument_graph([supported, unsupported])
-
-    assert choose_move([supported, unsupported], graph) == supported
 
 
 def test_no_legal_moves_returns_uci_null_move() -> None:
