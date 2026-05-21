@@ -360,15 +360,6 @@ def test_argument_selector_rejects_premature_minor_check() -> None:
 
 
 def test_argument_selector_rejects_search_proven_forced_mate() -> None:
-    # P2.8b FLAGGED REGRESSION -- fails on purpose, NOT re-baselined. The
-    # opinion-valued engine plays f2f3 instead of f2f1. Triage
-    # (reports/phase2-move-triage.md) found this position is fully lost: all
-    # three legal moves walk into a proven forced mate. f2f3 lets White mate
-    # in 1, f2f1 lets White mate in 2 -- f2f3 is the FASTER loss. The skeptical
-    # filter correctly excludes every move (empty_survivors); the decider then
-    # ranks by expectation() and picks the quicker mate. Picking the slowest
-    # loss in a lost position is the desired behaviour, so this is left failing
-    # and flagged for investigation (a least-resistance / DTM tie-break).
     board = owned_board_from_fen("4k2r/1p2bppp/p4n2/6N1/P3rn2/4Q3/1P1P1K1q/R1B5 w k - 0 24")
 
     decision = DialecticalChessEngine(
@@ -633,14 +624,6 @@ def test_low_search_depth_checks_reply_mate_for_minor_retreats() -> None:
 
 
 def test_low_search_depth_checks_reply_mate_for_material_captures() -> None:
-    # P2.8b FLAGGED REGRESSION -- fails on purpose, NOT re-baselined. The
-    # opinion-valued engine plays a1f1. Triage (reports/phase2-move-triage.md)
-    # found this position is fully lost: all 39 legal moves walk into a proven
-    # forced mate. a1f1 captures a bishop but allows White to mate in 1 -- it is
-    # the FASTEST loss in the position. This test exists precisely to assert the
-    # engine does not grab material into the quickest mate. The engine now does;
-    # left failing and flagged for investigation (least-resistance tie-break in
-    # an empty-survivors position).
     board = owned_board_from_fen("1k1r3r/1ppq1p2/p4np1/8/PB1b1P2/1PN2BK1/1QPP3P/R4b2 w - - 0 22")
 
     decision = DialecticalChessEngine(
@@ -1182,13 +1165,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_mildly_refuted_threats() 
 
     assert "tactical:allows_reply_forced_mate_in_2:g8e7" in probes["g8e7"].objections
 
-    # P2.8b FLAGGED REGRESSION -- the move assertion below fails on purpose and
-    # is NOT re-baselined. The opinion-valued engine plays g8e7 instead of a6e2.
-    # Triage (reports/phase2-move-triage.md) found this position is fully lost:
-    # both legal moves walk into a proven forced mate. g8e7 lets White mate in
-    # 2, a6e2 lets White mate in 3 -- g8e7 is the FASTER loss. As with the
-    # other empty-survivors positions, the engine should prefer the slowest
-    # loss; left failing and flagged for investigation.
     decision = DialecticalChessEngine(
         EngineSettings(
             dialectic_depth=0,

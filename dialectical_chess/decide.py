@@ -4,15 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import chess
 from doxa import Opinion
 from doxa.argumentation import evaluate
 
 from dialectical_chess.arguments import MoveProbe
+from dialectical_chess.evidence import forced_mate_refutation_distance
+from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.opinion_graph import (
     MoveArgumentationArtifacts,
     build_argumentation_artifacts,
 )
 from dialectical_chess.skeptical_filter import skeptical_survivors
+
+SLOWEST_LOSS_MAX_MATE_DEPTH = 4
 
 
 @dataclass(frozen=True)
@@ -35,9 +40,10 @@ def choose_move_argumentation(probes: list[MoveProbe]) -> ArgumentationDecision:
     pool = survivors if survivors else {probe.uci for probe in probes}
     selected = max(
         (probe for probe in probes if probe.uci in pool),
-        key=lambda probe: (
-            opinions[artifacts.move_arg[probe.uci]].expectation(),
-            probe.uci,
+        key=(
+            (lambda probe: empty_survivors_selection_key(probe, artifacts, opinions))
+            if empty_survivors
+            else (lambda probe: expectation_selection_key(probe, artifacts, opinions))
         ),
     )
     return ArgumentationDecision(
@@ -48,3 +54,37 @@ def choose_move_argumentation(probes: list[MoveProbe]) -> ArgumentationDecision:
             for uci, argument in artifacts.move_arg.items()
         },
     )
+
+
+def expectation_selection_key(
+    probe: MoveProbe,
+    artifacts: MoveArgumentationArtifacts,
+    opinions: dict[str, Opinion],
+) -> tuple[float, str]:
+    return (opinions[artifacts.move_arg[probe.uci]].expectation(), probe.uci)
+
+
+def empty_survivors_selection_key(
+    probe: MoveProbe,
+    artifacts: MoveArgumentationArtifacts,
+    opinions: dict[str, Opinion],
+) -> tuple[int, float, str]:
+    return (
+        slowest_loss_distance(probe),
+        opinions[artifacts.move_arg[probe.uci]].expectation(),
+        probe.uci,
+    )
+
+
+def slowest_loss_distance(probe: MoveProbe) -> int:
+    if probe.post_fen is not None:
+        board = chess.Board(probe.post_fen)
+        for mate_depth in range(1, SLOWEST_LOSS_MAX_MATE_DEPTH + 1):
+            if has_forced_mate(board, mate_depth=mate_depth):
+                return mate_depth
+    distances = [
+        distance
+        for evidence in (*probe.objection_evidence, *probe.reply_attack_evidence)
+        if (distance := forced_mate_refutation_distance(evidence)) is not None
+    ]
+    return min(distances, default=0)

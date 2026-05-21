@@ -436,6 +436,17 @@ def is_forced_mate_refutation(evidence: ArgumentEvidence) -> bool:
     }
 
 
+def forced_mate_refutation_distance(evidence: ArgumentEvidence) -> int | None:
+    """Return the proven mate distance for a hard refutation, when encoded."""
+    if evidence.objection_kind == ObjectionKind.REPLY_MATE_IN_ONE:
+        return 1
+    if evidence.label.startswith("reply_mate:undefended:"):
+        return 1
+    if evidence.objection_kind == ObjectionKind.REPLY_FORCED_MATE:
+        return forced_mate_depth(evidence.label)
+    return None
+
+
 def is_large_search_refutation(evidence: ArgumentEvidence) -> bool:
     return (
         evidence.search_refutation_score is not None

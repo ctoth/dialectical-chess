@@ -718,6 +718,24 @@ def test_empty_survivors_when_every_move_hard_refuted() -> None:
 
 
 @pytest.mark.property
+def test_empty_survivors_prefer_slowest_proven_loss() -> None:
+    fast_loss = make_probe(
+        "a1a2",
+        reasons=("tactical:check",),
+        objections=("tactical:allows_reply_mate_in_one:a1a2:h8h1",),
+    )
+    slow_loss = make_probe(
+        "b1b2",
+        objections=("tactical:allows_reply_forced_mate_in_3:b1b2",),
+    )
+
+    decision = choose_move_argumentation([fast_loss, slow_loss])
+
+    assert decision.empty_survivors is True
+    assert decision.selected.uci == "b1b2"
+
+
+@pytest.mark.property
 def test_over_filtered_position_detected() -> None:
     """§5d — a soft reply objection must not be silently hard-filtered.
 
