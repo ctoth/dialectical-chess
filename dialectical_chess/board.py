@@ -210,7 +210,14 @@ class OwnedBoard:
         castling = self._updated_castling(move, piece, captured)
         ep_square = None
         if is_pawn and abs(rank_of(move.to_square) - rank_of(move.from_square)) == 2:
-            ep_square = (move.from_square + move.to_square) // 2
+            candidate = (move.from_square + move.to_square) // 2
+            enemy_pawn = "p" if color == "w" else "P"
+            target_file, target_rank = file_of(move.to_square), rank_of(move.to_square)
+            for file_delta in (-1, 1):
+                adjacent = square_from_file_rank(target_file + file_delta, target_rank)
+                if adjacent is not None and board[adjacent] == enemy_pawn:
+                    ep_square = candidate
+                    break
         halfmove = 0 if is_pawn or captured is not None else self.halfmove_clock + 1
         fullmove = self.fullmove_number + (1 if self.turn == "b" else 0)
         return OwnedBoard(tuple(board), opposite(self.turn), castling, ep_square, halfmove, fullmove)
