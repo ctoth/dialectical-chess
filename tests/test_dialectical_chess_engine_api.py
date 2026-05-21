@@ -196,6 +196,32 @@ def test_uci_go_movetime_returns_within_budget_tolerance() -> None:
     assert output.getvalue().count("bestmove ") == 1
 
 
+def test_uci_go_low_clock_budget_zero_returns_legal_bestmove() -> None:
+    """C1 regression: the budget<=0 low-clock fallback must not crash the UCI
+    process. best_available_move treated OwnedBoard.legal_moves as a property;
+    it is a method. go wtime 100 / 50 / 10 all drive budget_ms <= 0."""
+    import chess
+
+    from dialectical_chess.uci import run_uci
+
+    start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    for clock in (100, 50, 10):
+        output = StringIO()
+        input_stream = StringIO(
+            f"position fen {start_fen}\n"
+            f"go wtime {clock} btime {clock}\n"
+            "quit\n"
+        )
+
+        assert run_uci(input_stream, output) == 0
+
+        text = output.getvalue()
+        assert text.count("bestmove ") == 1, (clock, text)
+        bestmove = text.split("bestmove ")[1].split()[0]
+        legal = {move.uci() for move in chess.Board(start_fen).legal_moves}
+        assert bestmove in legal, (clock, bestmove)
+
+
 def test_uci_go_depth_is_honored(monkeypatch) -> None:
     import dialectical_chess.uci as uci
     from dialectical_chess.arguments import MoveProbe

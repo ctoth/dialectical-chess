@@ -321,7 +321,7 @@ def finish_search(active_search: ActiveSearch) -> str:
 
 
 def best_available_move(board) -> str:
-    legal_moves = sorted(board.legal_moves, key=lambda move: move.uci())
+    legal_moves = sorted(board.legal_moves(), key=lambda move: move.uci())
     if not legal_moves:
         return "0000"
     return legal_moves[0].uci()
