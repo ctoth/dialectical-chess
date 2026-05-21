@@ -162,19 +162,27 @@ def run_epd(args: argparse.Namespace) -> dict[str, Any]:
         except Exception as exc:
             if args.fail_fast:
                 raise
-            results.append({"line": index, "error": str(exc), "correct": False})
+            results.append({"line": index, "error": str(exc), "errored": True, "correct": False})
         report_progress("epd", index, len(lines), args)
-    solved = sum(1 for result in results if result.get("correct"))
-    avoided = sum(1 for result in results if result.get("avoided"))
+    errored = sum(1 for result in results if result.get("errored") or "error" in result)
+    evaluated = len(results) - errored
+    solved = sum(1 for result in results if not result.get("errored") and result.get("correct"))
+    failed = sum(1 for result in results if not result.get("errored") and not result.get("correct"))
+    avoid_results = [result for result in results if result.get("avoided") is not None]
+    avoided = sum(1 for result in avoid_results if result.get("avoided"))
     return {
         "ok": all("error" not in result for result in results),
         "mode": "epd",
         "suite": str(args.epd) if args.epd else "built-in-smoke",
         "total": len(results),
+        "evaluated": evaluated,
+        "errored": errored,
+        "failed": failed,
         "solved": solved,
-        "hit_rate": solved / len(results) if results else 0.0,
+        "hit_rate": solved / evaluated if evaluated else 0.0,
         "avoided": avoided,
-        "avoid_rate": avoided / len(results) if results else 0.0,
+        "avoid_total": len(avoid_results),
+        "avoid_rate": avoided / len(avoid_results) if avoid_results else None,
         "settings": settings(args),
         "positions": results,
     }
@@ -777,13 +785,23 @@ def score_board(
     elapsed_ms = (time.perf_counter() - started) * 1000.0
     selected_uci = None if selected is None else decision.move_uci
     avoid_uci = avoid_uci or set()
+    selected_expected = selected_uci in expected_uci
+    selected_avoided = None if not avoid_uci else selected_uci not in avoid_uci
+    if expected_uci and avoid_uci:
+        correct = selected_expected and bool(selected_avoided)
+    elif expected_uci:
+        correct = selected_expected
+    elif avoid_uci:
+        correct = bool(selected_avoided)
+    else:
+        correct = False
     return {
         "expected_uci": sorted(expected_uci),
         "avoid_uci": sorted(avoid_uci),
         "selected_uci": selected_uci,
         "selected_san": None if selected is None else selected.san,
-        "correct": selected_uci in expected_uci if expected_uci else selected_uci not in avoid_uci,
-        "avoided": selected_uci not in avoid_uci,
+        "correct": correct,
+        "avoided": selected_avoided,
         "score": None if selected is None else selected.score,
         "reasons": [] if selected is None else list(selected.reasons),
         "objections": [] if selected is None else list(selected.objections),

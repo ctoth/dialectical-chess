@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+import queue
 import shutil
 import subprocess
+import threading
 from argparse import Namespace
 from collections import Counter
 from pathlib import Path
@@ -16,6 +18,8 @@ from dialectical_chess.baselines import fastchess_baseline
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+INTERNAL_MATCH_MOVETIME_MS = 1000
+INTERNAL_MATCH_BESTMOVE_TIMEOUT_SECONDS = 5.0
 
 
 def run_uci_match(args: Namespace) -> dict[str, Any]:
@@ -62,12 +66,14 @@ def run_uci_match(args: Namespace) -> dict[str, Any]:
     prepare_match_outputs(args)
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     failures = parse_uci_match_failures(completed.stdout)
+    games_played = parse_uci_match_games_played(completed.stdout)
     return {
-        "ok": completed.returncode == 0 and not any(failures.values()),
+        "ok": completed.returncode == 0 and not any(failures.values()) and games_played == args.match_games,
         "mode": "uci_match",
         "runner": runner,
         "baseline": args.match_baseline,
         "requested_games": args.match_games,
+        "games_played": games_played,
         "command": command,
         "returncode": completed.returncode,
         "failures": failures,
@@ -176,26 +182,43 @@ def parse_uci_match_failures(stdout: str) -> dict[str, int]:
     }
 
 
+def parse_uci_match_games_played(stdout: str) -> int | None:
+    for pattern in (
+        r"\bGames:\s+(\d+)\b",
+        r"\bFinished\s+(\d+)\s+games?\b",
+        r"\b(\d+)\s+games?\s+played\b",
+    ):
+        match = re.search(pattern, stdout, flags=re.IGNORECASE)
+        if match is not None:
+            return int(match.group(1))
+    return None
+
+
 def run_internal_uci_match(args: Namespace) -> dict[str, Any]:
     games = []
     crashes = 0
     illegal_moves = 0
+    losses_on_time = 0
     for game_index in range(args.match_games):
         white_args = [] if game_index % 2 == 0 else ["--no-smt-mate"]
         black_args = ["--no-smt-mate"] if game_index % 2 == 0 else []
         result = play_internal_uci_game(white_args, black_args, args.match_max_plies)
         crashes += result["crashes"]
         illegal_moves += result["illegal_moves"]
+        losses_on_time += result["losses_on_time"]
         games.append(result)
-    wdl = Counter(game["result"] for game in games)
+    result_counts = Counter(game["result"] for game in games)
     return {
-        "ok": crashes == 0 and illegal_moves == 0,
-        "mode": "internal_uci_match",
+        "ok": crashes == 0 and illegal_moves == 0 and losses_on_time == 0 and len(games) == args.match_games,
+        "mode": "selfplay_smoke",
+        "requested_games": args.match_games,
         "games": len(games),
         "max_plies": args.match_max_plies,
-        "wdl": dict(sorted(wdl.items())),
+        "movetime_ms": INTERNAL_MATCH_MOVETIME_MS,
+        "result_counts": dict(sorted(result_counts.items())),
         "crashes": crashes,
         "illegal_moves": illegal_moves,
+        "losses_on_time": losses_on_time,
         "results": games,
     }
 
@@ -211,6 +234,7 @@ def play_internal_uci_game(
     moves: list[str] = []
     crashes = 0
     illegal_moves = 0
+    losses_on_time = 0
     try:
         initialize_uci(white)
         initialize_uci(black)
@@ -219,8 +243,12 @@ def play_internal_uci_game(
                 break
             engine = white if board.turn == chess.WHITE else black
             send_uci(engine, "position startpos" + ("" if not moves else " moves " + " ".join(moves)))
-            send_uci(engine, "go")
-            bestmove = read_bestmove(engine)
+            send_uci(engine, f"go movetime {INTERNAL_MATCH_MOVETIME_MS}")
+            try:
+                bestmove = read_bestmove(engine, timeout_seconds=INTERNAL_MATCH_BESTMOVE_TIMEOUT_SECONDS)
+            except TimeoutError:
+                losses_on_time += 1
+                break
             if bestmove == "0000":
                 break
             move = chess.Move.from_uci(bestmove)
@@ -243,6 +271,7 @@ def play_internal_uci_game(
         "final_fen": board.fen(),
         "crashes": crashes,
         "illegal_moves": illegal_moves,
+        "losses_on_time": losses_on_time,
     }
 
 
@@ -286,11 +315,23 @@ def read_until(process: subprocess.Popen[str], needle: str) -> list[str]:
             return lines
 
 
-def read_bestmove(process: subprocess.Popen[str]) -> str:
+def read_bestmove(process: subprocess.Popen[str], *, timeout_seconds: float = INTERNAL_MATCH_BESTMOVE_TIMEOUT_SECONDS) -> str:
     if process.stdout is None:
         raise RuntimeError("UCI process has no stdout")
+    stdout = process.stdout
+    lines: queue.Queue[str] = queue.Queue()
+
+    def read_line() -> None:
+        lines.put(stdout.readline())
+
     while True:
-        line = process.stdout.readline()
+        reader = threading.Thread(target=read_line, daemon=True)
+        reader.start()
+        try:
+            line = lines.get(timeout=timeout_seconds)
+        except queue.Empty as exc:
+            process.kill()
+            raise TimeoutError("timed out waiting for bestmove") from exc
         if line == "":
             raise RuntimeError("UCI process exited")
         line = line.strip()
