@@ -196,6 +196,60 @@ def test_uci_go_movetime_returns_within_budget_tolerance() -> None:
     assert output.getvalue().count("bestmove ") == 1
 
 
+def test_critical_clock_profile_rejects_selected_forced_mate() -> None:
+    """M4 restored behaviour test (ported to parse_go / settings_for_go_request):
+    under a critical-clock budget the real engine still selects the sound move
+    e2e3. Pins the rewritten time-control profile's move selection."""
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import choose_uci_move, parse_go, settings_for_go_request
+
+    board = owned_board_from_fen("2b2k2/p2n1prp/1rNp2p1/8/4P2P/3B1PP1/P1P1K1q1/8 w - - 1 26")
+    request = parse_go("go wtime 1500 btime 30000 winc 100 binc 100".split())
+    settings, budget_ms = settings_for_go_request(
+        EngineSettings(search_depth=2, search_backend="alphabeta"),
+        board,
+        request,
+    )
+
+    # The critical-clock budget profile: depth dropped to 0, reply work off.
+    assert budget_ms is not None and budget_ms <= 100
+    assert settings.search_depth == 0
+    assert settings.dialectic_depth == 0
+    assert not settings.reply_mate_scan
+    assert not settings.positional_reasons
+    assert choose_uci_move(board, settings=settings) == "e2e3"
+
+
+def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(monkeypatch) -> None:
+    """M4 restored behaviour test (ported to parse_go / settings_for_go_request):
+    in a wide position the critical-clock profile must NOT run an unbounded
+    forced-mate proof, and the engine must still return a non-null move."""
+    from dialectical_chess import engine as engine_module
+    from dialectical_chess.engine import EngineSettings
+    from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_chess.uci import choose_uci_move, parse_go, settings_for_go_request
+
+    def reject_unbounded_mate_search(*args, **kwargs) -> bool:
+        raise AssertionError(
+            "critical profile should not run a selected forced-mate proof in wide positions"
+        )
+
+    monkeypatch.setattr(engine_module, "has_forced_mate", reject_unbounded_mate_search)
+    board = owned_board_from_fen("1rb1kr2/pp1p2pp/2nQ2n1/b5B1/5p2/2P2N2/PPK2P1P/R4B1R b - - 3 25")
+    request = parse_go("go btime 1500 wtime 30000 binc 100 winc 100".split())
+    settings, budget_ms = settings_for_go_request(
+        EngineSettings(search_depth=2, search_backend="alphabeta"),
+        board,
+        request,
+    )
+
+    assert budget_ms is not None and budget_ms <= 100
+    assert settings.search_depth == 0
+    assert not settings.reply_mate_scan
+    assert choose_uci_move(board, settings=settings) != "0000"
+
+
 def test_uci_go_low_clock_budget_zero_returns_legal_bestmove() -> None:
     """C1 regression: the budget<=0 low-clock fallback must not crash the UCI
     process. best_available_move treated OwnedBoard.legal_moves as a property;
