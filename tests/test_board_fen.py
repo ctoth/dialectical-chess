@@ -42,6 +42,16 @@ def test_double_pawn_push_en_passant_field_matches_python_chess(
     assert ep_field(owned.fen()) == ep_field(oracle.fen())
 
 
+def test_pinned_pawn_en_passant_field_matches_python_chess() -> None:
+    fen = "7k/3p4/8/K3P2r/8/8/8/8 b - - 0 1"
+    moves = ("d7d5",)
+
+    owned = apply_moves(OwnedBoard.from_fen(fen), moves)
+    oracle = oracle_after(fen, moves)
+
+    assert ep_field(owned.fen()) == ep_field(oracle.fen())
+
+
 def test_apply_checked_rejects_rook_through_pawn_move() -> None:
     board = OwnedBoard.from_fen(START_FEN)
 

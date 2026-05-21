@@ -219,15 +219,50 @@ class OwnedBoard:
         if is_pawn and abs(rank_of(move.to_square) - rank_of(move.from_square)) == 2:
             candidate = (move.from_square + move.to_square) // 2
             enemy_pawn = "p" if color == "w" else "P"
-            target_file, target_rank = file_of(move.to_square), rank_of(move.to_square)
-            for file_delta in (-1, 1):
-                adjacent = square_from_file_rank(target_file + file_delta, target_rank)
-                if adjacent is not None and board[adjacent] == enemy_pawn:
-                    ep_square = candidate
-                    break
+            if self._has_legal_en_passant_capture(
+                tuple(board),
+                candidate,
+                move.to_square,
+                enemy_pawn=enemy_pawn,
+                castling=castling,
+            ):
+                ep_square = candidate
         halfmove = 0 if is_pawn or captured is not None else self.halfmove_clock + 1
         fullmove = self.fullmove_number + (1 if self.turn == "b" else 0)
         return OwnedBoard(tuple(board), opposite(self.turn), castling, ep_square, halfmove, fullmove)
+
+    def _has_legal_en_passant_capture(
+        self,
+        post_move_squares: tuple[str | None, ...],
+        ep_square: int,
+        pushed_pawn_square: int,
+        *,
+        enemy_pawn: str,
+        castling: str,
+    ) -> bool:
+        target_file = file_of(pushed_pawn_square)
+        target_rank = rank_of(pushed_pawn_square)
+        capturing_color = opposite(self.turn)
+        trial_board = OwnedBoard(
+            post_move_squares,
+            capturing_color,
+            castling,
+            ep_square,
+            halfmove_clock=0,
+            fullmove_number=self.fullmove_number + (1 if self.turn == "b" else 0),
+        )
+        for file_delta in (-1, 1):
+            adjacent = square_from_file_rank(target_file + file_delta, target_rank)
+            if adjacent is None or post_move_squares[adjacent] != enemy_pawn:
+                continue
+            capture = OwnedMove(adjacent, ep_square, kind="en_passant")
+            try:
+                child = trial_board.apply(capture)
+            except ValueError:
+                continue
+            if not child.in_check(capturing_color):
+                return True
+        return False
 
     def apply_checked(self, move: OwnedMove | str) -> "OwnedBoard":
         move = OwnedMove.from_uci(move) if isinstance(move, str) else move
