@@ -18,6 +18,8 @@ from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.probe import ensure_owned_board, probe_moves
 from dialectical_chess.search import ReplyAnalysisSettings
 
+SELECTED_REPLY_MATE_LOW_CLOCK_LEGAL_LIMIT = 20
+
 
 @dataclass(frozen=True)
 class EngineSettings:
@@ -107,7 +109,7 @@ def selected_reply_mate_refutation_fixpoint(
     selector_mode: str,
 ) -> tuple[list[MoveProbe], RootArgumentGraph, MoveProbe | None]:
     move_by_uci = {move.uci(): move for move in board.legal_moves()}
-    if not allow_mate_four and len(move_by_uci) > 8:
+    if not allow_mate_four and len(move_by_uci) > SELECTED_REPLY_MATE_LOW_CLOCK_LEGAL_LIMIT:
         return probes, graph, selected
     refuted: set[str] = set()
     while selected is not None and selected.uci not in refuted:
