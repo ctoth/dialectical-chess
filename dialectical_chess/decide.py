@@ -9,7 +9,7 @@ from doxa import Opinion
 from doxa.argumentation import evaluate
 
 from dialectical_chess.arguments import MoveProbe
-from dialectical_chess.evidence import forced_mate_refutation_distance
+from dialectical_chess.evidence import ObjectionKind, forced_mate_refutation_distance
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.opinion_graph import (
     MoveArgumentationArtifacts,
@@ -60,8 +60,13 @@ def expectation_selection_key(
     probe: MoveProbe,
     artifacts: MoveArgumentationArtifacts,
     opinions: dict[str, Opinion],
-) -> tuple[float, str]:
-    return (opinions[artifacts.move_arg[probe.uci]].expectation(), probe.uci)
+) -> tuple[float, float, str]:
+    expectation = opinions[artifacts.move_arg[probe.uci]].expectation()
+    return (
+        expectation - material_safety_selection_penalty(probe),
+        expectation,
+        probe.uci,
+    )
 
 
 def empty_survivors_selection_key(
@@ -88,3 +93,48 @@ def slowest_loss_distance(probe: MoveProbe) -> int:
         if (distance := forced_mate_refutation_distance(evidence)) is not None
     ]
     return min(distances, default=0)
+
+
+def material_safety_selection_penalty(probe: MoveProbe) -> float:
+    if (
+        has_search_refutation_at_most(probe, -300)
+        and has_moved_piece_en_pris_objection(probe)
+        and has_ignored_hanging_piece_objection(probe)
+    ):
+        return 1.0
+    if not has_search_refutation_at_most(probe, -400):
+        return 0.0
+    for evidence in probe.objection_evidence:
+        if evidence.objection_kind == ObjectionKind.IGNORED_HANGING_PIECE:
+            return 1.0
+        if (
+            evidence.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
+            and evidence.moved_piece_en_pris_value is not None
+            and evidence.moved_piece_en_pris_value >= 300
+        ):
+            return 1.0
+    return 0.0
+
+
+def has_moved_piece_en_pris_objection(probe: MoveProbe) -> bool:
+    return any(
+        evidence.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
+        and evidence.moved_piece_en_pris_value is not None
+        and evidence.moved_piece_en_pris_value >= 300
+        for evidence in probe.objection_evidence
+    )
+
+
+def has_ignored_hanging_piece_objection(probe: MoveProbe) -> bool:
+    return any(
+        evidence.objection_kind == ObjectionKind.IGNORED_HANGING_PIECE
+        for evidence in probe.objection_evidence
+    )
+
+
+def has_search_refutation_at_most(probe: MoveProbe, threshold: int) -> bool:
+    for evidence in probe.objection_evidence:
+        score = evidence.search_refutation_score
+        if score is not None and score <= threshold:
+            return True
+    return False

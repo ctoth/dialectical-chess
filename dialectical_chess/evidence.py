@@ -322,10 +322,19 @@ def objection_strength(
         return 6 if forced_mate_depth(label) == 2 else 3
     if (
         objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
-        and (moved_value is None or moved_value < 300)
     ):
-        return 0
+        return material_cost_objection_strength(moved_value)
+    if objection_kind == ObjectionKind.IGNORED_HANGING_PIECE:
+        return material_cost_objection_strength(ignored_hanging_piece_value(label))
     return base_objection_strength(objection_kind)
+
+
+def material_cost_objection_strength(value: int | None) -> int:
+    if value is None or value < 300:
+        return 0
+    if value >= 900:
+        return 97
+    return 17
 
 
 def base_objection_strength(objection_kind: ObjectionKind) -> int:
@@ -360,7 +369,7 @@ def base_objection_strength(objection_kind: ObjectionKind) -> int:
         ):
             return 1
         case ObjectionKind.QUEEN_FLANK_INVASION:
-            return 2
+            return 9
         case _:
             return 0
 
@@ -397,6 +406,19 @@ def moved_piece_en_pris_value(label: str) -> int | None:
         return None
     try:
         return int(label.removeprefix(prefix))
+    except ValueError:
+        return None
+
+
+def ignored_hanging_piece_value(label: str) -> int | None:
+    prefix = "safety:ignored_hanging_piece:"
+    if not label.startswith(prefix):
+        return None
+    parts = label.split(":")
+    if len(parts) != 5:
+        return None
+    try:
+        return int(parts[4])
     except ValueError:
         return None
 

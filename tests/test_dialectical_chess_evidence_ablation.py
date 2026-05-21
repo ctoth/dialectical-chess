@@ -160,13 +160,6 @@ def test_argument_selector_rejects_hanging_checking_minor_move() -> None:
 
 
 def test_argument_selector_requires_strong_compensation_for_hanging_minor() -> None:
-    # P2.8b FLAGGED REGRESSION -- this test fails on purpose and is NOT
-    # re-baselined. The opinion-valued engine plays c3d5 instead of e4e5.
-    # Triage (reports/phase2-move-triage.md, reports/argdriven-phase2-8b.md)
-    # found c3d5 is WORSE: the engine's own depth-2 alphabeta ranks c3d5 5th of
-    # 38 at -420 cp, vs e4e5 1st at -200 cp; c3d5 drops the d4 knight (static
-    # exchange loss 320 cp) while e4e5 loses only a pawn. This is a genuine
-    # move-quality regression for investigation, deliberately left failing.
     board = owned_board_from_fen("rn2kbnr/1bpp1pp1/pp2pq2/7p/2BNP2p/2N5/PPPP1PPP/R1BQ1RK1 w kq - 1 8")
 
     decision = DialecticalChessEngine(
@@ -1202,13 +1195,6 @@ def test_castled_flank_pawn_push_gets_king_shield_objection() -> None:
 
 
 def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
-    # P2.8b FLAGGED REGRESSION -- fails on purpose, NOT re-baselined. The
-    # opinion-valued engine plays c5f2 instead of g7g6. Triage
-    # (reports/phase2-move-triage.md) found c5f2 is a BLUNDER: Bxf2+ sacrifices
-    # a bishop for a single pawn (static exchange loss 330 cp on f2, no
-    # compensation). The engine's own depth-2 alphabeta ranks c5f2 21st of 37
-    # moves at -230 cp, vs g7g6 1st at -100 cp. Genuine move-quality
-    # regression, deliberately left failing for investigation.
     board = owned_board_from_fen("r1bqk1nr/1ppp1ppp/2n5/p1bN4/4P1Q1/8/PPP2PPP/R1B1KBNR b KQkq - 1 6")
 
     decision = DialecticalChessEngine(

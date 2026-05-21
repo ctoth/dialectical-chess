@@ -286,6 +286,20 @@ A_ROLE   = 0.5     # base rate of every leaf argument   (tuning.py)
 
 Two constants, both calibratable, both with the §1b table as provenance.
 
+P2.8b regression fix amendment: material-safety objection strengths for
+`safety:moved_piece_en_pris:*` and `safety:ignored_hanging_piece:*:*:*` scale
+from the encoded static-exchange material at stake instead of using the generic
+soft-objection value. Pawn-only exposure (`<300cp`) contributes `0`; any
+minor/rook exposure (`300-899cp`) contributes `17`; a queen-scale exposure
+(`>=900cp`) contributes `97`.
+`king_safety:queen_flank_invasion:*` is raised to `9`, because P2.8b's material
+case showed that the old soft value let unsupported queen-flank weakening
+outrank the one-step flank-pawn response. These are still the same
+aggregate-strength channel (§1a/§1e), but they make the residual after any
+synthesized compensation defeater reflect the material actually at risk and
+keep a hung knight or bishop from being erased by a generic tactical/check
+support reason.
+
 ---
 
 ## 2. The move node — LOCKED
@@ -296,8 +310,21 @@ A `move:{uci}` argument has **no evidence of its own**. Its intrinsic is:
 intrinsic[move:{uci}] = Opinion.vacuous(tau)
 ```
 
-where `tau = squash(static_prior(probe))` — the squashed static prior, fully
-specified in §8 (the M3 fix). `Opinion.vacuous(tau) = (0, 0, 1, tau)`.
+where `tau = squash(static_prior(probe) - material_safety_prior_penalty(probe))`.
+The static prior is fully specified in §8 (the M3 fix). The P2.8b
+`material_safety_prior_penalty` amendment applies `300cp` to
+`queen_flank_invasion` objections on non-development moves, and also on
+development moves when typed alphabeta evidence refutes the move at
+`<= -300cp`; sound development moves such as the P2.8b `g8f6` equal case keep
+the soft-objection-only treatment. It also applies four times the encoded moved-piece
+value for a `moved_piece_en_pris` objection when typed alphabeta evidence
+refutes the move at `<= -400cp`. `Opinion.vacuous(tau) = (0, 0, 1, tau)`.
+The same material-safety-plus-typed-search condition is also applied as a
+selection penalty after `expectation()` for `moved_piece_en_pris` /
+`ignored_hanging_piece` objections paired with `search_refutes:alphabeta` at
+`<= -400cp`, and for the combined moved-piece-en-pris plus ignored-hanging-piece
+shape at `<= -300cp`. It is not a skeptical-filter refutation, so forced-mate
+filtering remains reserved for mate facts.
 
 **`tau` must be strictly in `(0,1)`.** `Opinion.vacuous(0.0)` and
 `Opinion.vacuous(1.0)` both raise `ValueError("a=… not in (0, 1)")`. `squash`

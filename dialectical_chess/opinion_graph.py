@@ -76,7 +76,6 @@ def build_argumentation_artifacts(
         move = move_argument_id(probe.uci)
         move_arg[probe.uci] = move
         arguments.add(move)
-        intrinsic[move] = Opinion.vacuous(squash(static_prior(probe)))
         filter_arguments.add(move)
 
         support_items = [
@@ -100,12 +99,19 @@ def build_argumentation_artifacts(
         ]
         effective_objections: list[ArgumentEvidence] = []
         objection_strength = 0
+        material_safety_prior_penalty = 0
         for objection in objection_items:
             residual = effective_objection_strength(probe, objection)
             if residual <= 0:
                 continue
             objection_strength += residual
+            material_safety_prior_penalty += material_safety_prior_penalty_for(
+                probe, objection
+            )
             effective_objections.append(objection)
+        intrinsic[move] = Opinion.vacuous(
+            squash(static_prior(probe) - material_safety_prior_penalty)
+        )
         if objection_strength > 0:
             objection_arg = objection_argument_id(probe.uci)
             arguments.add(objection_arg)
@@ -221,6 +227,40 @@ def has_typed_reason_defeater(probe: MoveProbe, defeater_kind: DefeaterKind) -> 
 
 def material_or_promotion_gain(probe: MoveProbe) -> int:
     return probe.captured_value + probe.promotion_value
+
+
+def material_safety_prior_penalty_for(
+    probe: MoveProbe,
+    objection: ArgumentEvidence,
+) -> int:
+    if objection.objection_kind == ObjectionKind.QUEEN_FLANK_INVASION:
+        if has_development_reason(probe) and not has_search_refutation_at_most(probe, -300):
+            return 0
+        return 300
+    if (
+        objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
+        and objection.moved_piece_en_pris_value is not None
+        and has_search_refutation_at_most(probe, -400)
+    ):
+        return 4 * objection.moved_piece_en_pris_value
+    if (
+        objection.objection_kind == ObjectionKind.IGNORED_HANGING_PIECE
+        and has_search_refutation_at_most(probe, -400)
+    ):
+        return 300
+    return 0
+
+
+def has_search_refutation_at_most(probe: MoveProbe, threshold: int) -> bool:
+    for evidence in probe.objection_evidence:
+        score = evidence.search_refutation_score
+        if score is not None and score <= threshold:
+            return True
+    return False
+
+
+def has_development_reason(probe: MoveProbe) -> bool:
+    return any(evidence.label.startswith("development:") for evidence in probe.reason_evidence)
 
 
 def move_argument_id(uci: str) -> str:

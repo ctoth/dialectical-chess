@@ -66,6 +66,7 @@ from dialectical_chess.arguments import MoveProbe  # noqa: E402
 from dialectical_chess.evidence import (  # noqa: E402
     ObjectionKind,
     is_forced_mate_refutation,
+    to_argument_evidence,
 )
 from dialectical_chess.probe import owned_board_from_fen, probe_moves  # noqa: E402
 
@@ -438,6 +439,21 @@ def test_contested_move_has_higher_uncertainty_than_unargued_move() -> None:
     # CCF keeps it high — the conflict lands in uncertainty.
     assert u_contested < u_unargued
     assert u_contested > 0.0
+
+
+@pytest.mark.property
+def test_hanging_piece_objections_scale_with_material_cost() -> None:
+    moved_minor = to_argument_evidence("safety:moved_piece_en_pris:330")
+    ignored_minor = to_argument_evidence("safety:ignored_hanging_piece:f2f4:b3:330")
+    moved_pawn = to_argument_evidence("safety:moved_piece_en_pris:100")
+    moved_queen = to_argument_evidence("safety:moved_piece_en_pris:900")
+    queen_flank = to_argument_evidence("king_safety:queen_flank_invasion:f7f5:g7")
+
+    assert moved_minor.objection_strength == 17
+    assert ignored_minor.objection_strength == 17
+    assert moved_pawn.objection_strength == 0
+    assert moved_queen.objection_strength == 97
+    assert queen_flank.objection_strength == 9
 
 
 # ==========================================================================
