@@ -20,7 +20,6 @@ from dialectical_chess.evidence import (
     to_argument_evidence,
 )
 
-SELECTOR_MODES = frozenset({"argument", "score", "grounded", "support", "categoriser", "optimizer"})
 POSITIONAL_SCORE_BONUS = 25
 COMPENSATING_TACTICAL_THREAT_THRESHOLD = 700
 
@@ -77,50 +76,14 @@ class RootArgumentGraph:
 def choose_move(
     probes: list[MoveProbe],
     graph: RootArgumentGraph | None = None,
-    *,
-    selector_mode: str = "argument",
 ) -> MoveProbe:
     if not probes:
         raise ValueError("position has no legal moves")
-    if selector_mode not in SELECTOR_MODES:
-        raise ValueError(f"unknown selector_mode: {selector_mode}")
     graph = graph or build_root_argument_graph(probes)
-    if selector_mode == "score":
-        return sorted(probes, key=score_selection_key)[0]
-    if selector_mode == "grounded":
-        return sorted(grounded_candidates(probes, graph), key=score_selection_key)[0]
-    if selector_mode == "support":
-        return sorted(probes, key=lambda probe: support_selection_key(probe, graph))[0]
-    if selector_mode == "categoriser":
-        return sorted(probes, key=lambda probe: categoriser_decision_key(probe, graph))[0]
-    if selector_mode == "optimizer":
-        from dialectical_chess.optimizer import choose_optimized_move
-
-        return choose_optimized_move(probes, graph)
     return sorted(
         probes,
         key=lambda probe: categoriser_decision_key(probe, graph),
     )[0]
-
-
-def grounded_candidates(probes: list[MoveProbe], graph: RootArgumentGraph) -> list[MoveProbe]:
-    accepted = [
-        probe
-        for probe in probes
-        if graph.move_arguments[probe.uci] in graph.grounded_extension
-    ]
-    return accepted if accepted else probes
-
-
-def argument_selection_candidates(probes: list[MoveProbe], graph: RootArgumentGraph) -> list[MoveProbe]:
-    candidates = grounded_candidates(probes, graph)
-    if any(has_forced_mate_refutation(probe) for probe in candidates):
-        return probes
-    return candidates
-
-
-def score_selection_key(probe: MoveProbe) -> tuple[int, str]:
-    return (-probe.score, probe.uci)
 
 
 def categoriser_decision_key(
@@ -131,125 +94,6 @@ def categoriser_decision_key(
     ranking_scores = graph.ranking["scores"]
     move_rank = float(ranking_scores.get(move_arg, 0.0))
     return (-move_rank, -probe.score, probe.uci)
-
-
-def selection_key(
-    probe: MoveProbe,
-    graph: RootArgumentGraph,
-) -> tuple[Any, ...]:
-    move_arg = graph.move_arguments[probe.uci]
-    ranking_scores = graph.ranking["scores"]
-    move_rank = float(ranking_scores.get(move_arg, 0.0))
-    mode = positional_support_mode(graph)
-    accepted_tactical = accepted_tactical_support_count(probe, graph)
-    accepted_positional = effective_positional_support_count(probe, graph, mode)
-    accepted_defenses = sum(
-        1
-        for reply_attack in probe.reply_attacks
-        if f"defense:{probe.uci}:{reply_attack}" in graph.grounded_extension
-    )
-    unresolved_attacks = sum(
-        1
-        for reply_attack in probe.reply_attacks
-        if f"reply_attack:{probe.uci}:{reply_attack}" in graph.grounded_extension
-    )
-    if mode == "quiet":
-        forced_mate_refuted = has_forced_mate_refutation(probe)
-        return (
-            severe_objection_count(probe),
-            1 if forced_mate_refuted else 0,
-            -effective_score(probe, mode) if forced_mate_refuted else 0,
-            -move_rank,
-            -accepted_tactical,
-            unresolved_attacks,
-            -accepted_positional,
-            -accepted_defenses,
-            -effective_score(probe, mode),
-            probe.uci,
-        )
-    forced_mate_refuted = has_forced_mate_refutation(probe)
-    return (
-        severe_objection_count(probe),
-        1 if forced_mate_refuted else 0,
-        -effective_score(probe, mode) if forced_mate_refuted else 0,
-        -accepted_tactical,
-        unresolved_attacks,
-        -effective_score(probe, mode),
-        -material_or_promotion_gain(probe),
-        -accepted_defenses,
-        -move_rank,
-        -accepted_positional,
-        probe.uci,
-    )
-
-
-def support_selection_key(
-    probe: MoveProbe,
-    graph: RootArgumentGraph,
-) -> tuple[Any, ...]:
-    mode = positional_support_mode(graph)
-    accepted_tactical = accepted_tactical_support_count(probe, graph)
-    accepted_positional = effective_positional_support_count(probe, graph, mode)
-    accepted_defenses = accepted_defense_count(probe, graph)
-    unresolved_attacks = unresolved_attack_count(probe, graph)
-    if mode == "quiet":
-        return (
-            severe_objection_count(probe),
-            -accepted_tactical,
-            unresolved_attacks,
-            -accepted_positional,
-            -accepted_defenses,
-            -effective_score(probe, mode),
-            probe.uci,
-        )
-    return (
-        severe_objection_count(probe),
-        -accepted_tactical,
-        unresolved_attacks,
-        -effective_score(probe, mode),
-        -material_or_promotion_gain(probe),
-        -accepted_defenses,
-        -accepted_positional,
-        probe.uci,
-    )
-
-
-def categoriser_selection_key(
-    probe: MoveProbe,
-    graph: RootArgumentGraph,
-) -> tuple[Any, ...]:
-    move_arg = graph.move_arguments[probe.uci]
-    ranking_scores = graph.ranking["scores"]
-    move_rank = float(ranking_scores.get(move_arg, 0.0))
-    mode = positional_support_mode(graph)
-    if mode == "quiet":
-        return (
-            severe_objection_count(probe),
-            -move_rank,
-            -accepted_tactical_support_count(probe, graph),
-            unresolved_attack_count(probe, graph),
-            -effective_positional_support_count(probe, graph, mode),
-            -effective_score(probe, mode),
-            probe.uci,
-        )
-    return (
-        severe_objection_count(probe),
-        -accepted_tactical_support_count(probe, graph),
-        unresolved_attack_count(probe, graph),
-        -effective_score(probe, mode),
-        -material_or_promotion_gain(probe),
-        -move_rank,
-        -effective_positional_support_count(probe, graph, mode),
-        probe.uci,
-    )
-
-
-def accepted_support_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:
-    return sum(
-        1
-        for reason in probe.reasons
-        if f"reason:{probe.uci}:{reason}" in graph.grounded_extension
-    )
 
 
 def accepted_tactical_support_count(probe: MoveProbe, graph: RootArgumentGraph) -> int:

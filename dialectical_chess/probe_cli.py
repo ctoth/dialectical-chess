@@ -18,7 +18,7 @@ from pathlib import Path
 import chess
 
 from dialectical_chess.adapters import build_pgn, build_svg, final_board, load_game
-from dialectical_chess.arguments import SELECTOR_MODES, build_argument_payload
+from dialectical_chess.arguments import build_argument_payload
 from dialectical_chess.engine import DialecticalChessEngine, EngineSettings
 from dialectical_chess.probe import owned_board_from_fen
 from dialectical_chess.search import ReplyAnalysisSettings
@@ -46,7 +46,6 @@ def main(argv: list[str] | None = None) -> int:
         choices=("negamax", "alphabeta"),
         default="negamax",
     )
-    parser.add_argument("--selector-mode", choices=sorted(SELECTOR_MODES), default="argument")
     parser.add_argument("--no-smt-mate", action="store_false", dest="smt_mate")
     parser.add_argument("--no-smt-fork", action="store_false", dest="smt_fork")
     parser.add_argument("--no-positional-reasons", action="store_false", dest="positional_reasons")
@@ -66,7 +65,6 @@ def main(argv: list[str] | None = None) -> int:
             search_backend=args.search_backend,
             smt_mate=args.smt_mate,
             smt_fork=args.smt_fork,
-            selector_mode=args.selector_mode,
             positional_reasons=args.positional_reasons,
             reply_analysis=reply_analysis_settings(args),
         )
@@ -81,7 +79,6 @@ def main(argv: list[str] | None = None) -> int:
             search_backend=args.search_backend,
             smt_mate=args.smt_mate,
             smt_fork=args.smt_fork,
-            selector_mode=args.selector_mode,
             positional_reasons=args.positional_reasons,
             reply_analysis=reply_analysis_settings(args),
         )

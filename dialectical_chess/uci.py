@@ -71,7 +71,6 @@ def run_uci(
     search_backend: str = "negamax",
     smt_mate: bool = True,
     smt_fork: bool = True,
-    selector_mode: str = "argument",
     positional_reasons: bool = True,
     reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
@@ -82,7 +81,6 @@ def run_uci(
         search_backend=search_backend,
         smt_mate=smt_mate,
         smt_fork=smt_fork,
-        selector_mode=selector_mode,
         positional_reasons=positional_reasons,
         reply_mate_scan=reply_mate_scan,
         reply_analysis=reply_analysis or ReplyAnalysisSettings(),
@@ -188,7 +186,6 @@ def choose_uci_move(
     search_backend: str = "negamax",
     smt_mate: bool = True,
     smt_fork: bool = True,
-    selector_mode: str = "argument",
     positional_reasons: bool = True,
     reply_mate_scan: bool = True,
     reply_analysis: ReplyAnalysisSettings | None = None,
@@ -200,7 +197,6 @@ def choose_uci_move(
         search_backend=search_backend,
         smt_mate=smt_mate,
         smt_fork=smt_fork,
-        selector_mode=selector_mode,
         positional_reasons=positional_reasons,
         reply_mate_scan=reply_mate_scan,
         reply_analysis=reply_analysis or ReplyAnalysisSettings(),
@@ -214,15 +210,9 @@ def choose_uci_move(
     if decision.selected is None:
         return "0000"
     if output_stream is not None:
-        _uci_write(output_stream, f"info string selector_mode={settings.selector_mode}")
         _uci_write(output_stream, f"info string positional_reasons={settings.positional_reasons}")
         _uci_write(output_stream, f"info string reply_mate_scan={settings.reply_mate_scan}")
         _uci_write(output_stream, f"info string reply_analysis={settings.reply_analysis}")
-        if decision.selected.optimizer_trace:
-            _uci_write(
-                output_stream,
-                f"info string optimizer_status={decision.selected.optimizer_trace.get('status')}",
-            )
         _uci_write(output_stream, f"info score cp {decision.selected.score} pv {decision.move_uci}")
     return decision.move_uci
 

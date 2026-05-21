@@ -153,8 +153,6 @@ def dialectical_uci_args(args: Namespace) -> list[str]:
         str(args.search_depth),
         "--search-backend",
         args.search_backend,
-        "--selector-mode",
-        args.selector_mode,
         "--reply-max-replies",
         str(args.reply_max_replies),
         "--reply-max-defense-nodes",

@@ -57,7 +57,6 @@ def render_summary(payload: dict[str, Any], source: Path) -> str:
     lines.extend(["", "## Positional Gates", ""])
     for left_name, right_name in (
         ("argument_d2", "argument_d2_no_positional"),
-        ("optimizer_d2", "optimizer_d2_no_positional"),
     ):
         left = by_name[left_name]
         right = by_name[right_name]

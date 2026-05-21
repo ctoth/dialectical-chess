@@ -34,8 +34,8 @@ def render_summary(payloads: list[dict[str, Any]]) -> str:
         "",
         "## Runs",
         "",
-        "| Selector | Depth | Total | Changed | On-only | Off-only | Both fail changed | Both solve changed |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Depth | Total | Changed | On-only | Off-only | Both fail changed | Both solve changed |",
+        "| ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     harmful_families: Counter[str] = Counter()
     tactical_context: Counter[str] = Counter()
@@ -44,8 +44,7 @@ def render_summary(payloads: list[dict[str, Any]]) -> str:
     for payload in payloads:
         settings = payload["settings"]
         lines.append(
-            "| {selector} | {depth} | {total} | {changed} | {on_only} | {off_only} | {both_fail} | {both_solve} |".format(
-                selector=settings["selector_mode"],
+            "| {depth} | {total} | {changed} | {on_only} | {off_only} | {both_fail} | {both_solve} |".format(
                 depth=settings["dialectic_depth"],
                 total=payload["total"],
                 changed=payload["changed_decisions"],
@@ -82,15 +81,14 @@ def render_summary(payloads: list[dict[str, Any]]) -> str:
             "",
             "## Regression Candidates",
             "",
-            "| Selector | Puzzle | Rating | Expected | Positional on | Positional off | Families | On reply attacks | Off tactical markers |",
-            "| --- | --- | ---: | --- | --- | --- | --- | --- | --- |",
+            "| Puzzle | Rating | Expected | Positional on | Positional off | Families | On reply attacks | Off tactical markers |",
+            "| --- | ---: | --- | --- | --- | --- | --- | --- |",
         ]
     )
     for entry in regression_candidates:
         classification = entry["classification"]
         lines.append(
-            "| {selector} | `{puzzle}` | {rating} | `{expected}` | `{on_move}` | `{off_move}` | {families} | {attacks} | {markers} |".format(
-                selector=entry["selector_mode"],
+            "| `{puzzle}` | {rating} | `{expected}` | `{on_move}` | `{off_move}` | {families} | {attacks} | {markers} |".format(
                 puzzle=entry["id"],
                 rating=entry["rating"],
                 expected=", ".join(entry["expected_uci"]),

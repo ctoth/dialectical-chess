@@ -14,7 +14,6 @@ from typing import Any
 
 import chess
 
-from dialectical_chess.arguments import SELECTOR_MODES
 from dialectical_chess.board import PERFT_FIXTURES, OwnedBoard, owned_perft
 from dialectical_chess.engine import DialecticalChessEngine, EngineSettings
 from dialectical_chess.evidence import is_report_positional_reason
@@ -62,8 +61,6 @@ def main() -> int:
     parser.add_argument("--dialectic-depth-from-mate-theme", action="store_true")
     parser.add_argument("--search-depth", type=int, default=0)
     parser.add_argument("--search-backend", choices=("negamax", "alphabeta"), default="negamax")
-    parser.add_argument("--selector-mode", choices=sorted(SELECTOR_MODES), default="argument")
-    parser.add_argument("--selector-mode-ablation", action="store_true")
     parser.add_argument("--no-positional-reasons", action="store_false", dest="positional_reasons")
     parser.add_argument("--reply-max-replies", type=int, default=128)
     parser.add_argument("--reply-max-defense-nodes", type=int, default=5000)
@@ -196,36 +193,34 @@ def run_ablation(args: argparse.Namespace) -> dict[str, Any]:
         for dialectic_depth in (0, 1, 2):
             for search_depth in (0, 1, 2, 3):
                 for backend in ("negamax", "alphabeta"):
-                    for selector_mode in ablation_selector_modes(args):
-                        case_args = argparse.Namespace(**vars(args))
-                        case_args.epd = base_epd
-                        case_args.smt_mate = smt_mate
-                        case_args.dialectic_depth = dialectic_depth
-                        case_args.search_depth = search_depth
-                        case_args.search_backend = backend
-                        case_args.selector_mode = selector_mode
-                        started = time.perf_counter()
-                        payload = run_epd(case_args)
-                        selected_moves = [
-                            position.get("selected_uci")
-                            for position in payload["positions"]
-                        ]
-                        if baseline_moves is None:
-                            baseline_moves = selected_moves
-                        runs.append(
-                            {
-                                "settings": settings(case_args),
-                                "total": payload["total"],
-                                "solved": payload["solved"],
-                                "hit_rate": payload["hit_rate"],
-                                "avoid_rate": payload["avoid_rate"],
-                                "selected_move_deltas_vs_first": sum(
-                                    left != right
-                                    for left, right in zip(selected_moves, baseline_moves, strict=False)
-                                ),
-                                "elapsed_ms": (time.perf_counter() - started) * 1000.0,
-                            }
-                        )
+                    case_args = argparse.Namespace(**vars(args))
+                    case_args.epd = base_epd
+                    case_args.smt_mate = smt_mate
+                    case_args.dialectic_depth = dialectic_depth
+                    case_args.search_depth = search_depth
+                    case_args.search_backend = backend
+                    started = time.perf_counter()
+                    payload = run_epd(case_args)
+                    selected_moves = [
+                        position.get("selected_uci")
+                        for position in payload["positions"]
+                    ]
+                    if baseline_moves is None:
+                        baseline_moves = selected_moves
+                    runs.append(
+                        {
+                            "settings": settings(case_args),
+                            "total": payload["total"],
+                            "solved": payload["solved"],
+                            "hit_rate": payload["hit_rate"],
+                            "avoid_rate": payload["avoid_rate"],
+                            "selected_move_deltas_vs_first": sum(
+                                left != right
+                                for left, right in zip(selected_moves, baseline_moves, strict=False)
+                            ),
+                            "elapsed_ms": (time.perf_counter() - started) * 1000.0,
+                        }
+                    )
     return {"ok": True, "mode": "ablation", "suite": str(base_epd) if base_epd else "built-in-smoke", "runs": runs}
 
 
@@ -447,7 +442,6 @@ def positional_delta_entry(
         "expected_uci": positional_on["expected_uci"],
         "rating": int(row.get("Rating") or 0),
         "themes": row.get("Themes", "").split(),
-        "selector_mode": args.selector_mode,
         "dialectic_depth": args.dialectic_depth,
         "changed_decision": on_move != off_move,
         "positional_on": positional_snapshot(positional_on),
@@ -629,41 +623,32 @@ def run_experiment_matrix(args: argparse.Namespace) -> dict[str, Any]:
 def experiment_matrix_cases(preset: str) -> list[dict[str, Any]]:
     if preset == "smoke":
         return [
-            {"name": "argument_d0", "overrides": {"selector_mode": "argument", "dialectic_depth": 0}},
-            {"name": "argument_d1", "overrides": {"selector_mode": "argument", "dialectic_depth": 1}},
-            {"name": "score_static", "overrides": {"selector_mode": "score", "dialectic_depth": 0}},
+            {"name": "argument_d0", "overrides": {"dialectic_depth": 0}},
+            {"name": "argument_d1", "overrides": {"dialectic_depth": 1}},
             {
                 "name": "argument_mate_theme_depth",
-                "overrides": {"selector_mode": "argument", "dialectic_depth_from_mate_theme": True},
+                "overrides": {"dialectic_depth_from_mate_theme": True},
             },
         ]
     return [
-        {"name": "argument_d0", "overrides": {"selector_mode": "argument", "dialectic_depth": 0}},
-        {"name": "argument_d1", "overrides": {"selector_mode": "argument", "dialectic_depth": 1}},
-        {"name": "argument_d2", "overrides": {"selector_mode": "argument", "dialectic_depth": 2}},
-        {"name": "score_static", "overrides": {"selector_mode": "score", "dialectic_depth": 0}},
-        {"name": "support_d1", "overrides": {"selector_mode": "support", "dialectic_depth": 1}},
-        {"name": "support_d2", "overrides": {"selector_mode": "support", "dialectic_depth": 2}},
-        {"name": "categoriser_d1", "overrides": {"selector_mode": "categoriser", "dialectic_depth": 1}},
-        {"name": "categoriser_d2", "overrides": {"selector_mode": "categoriser", "dialectic_depth": 2}},
-        {"name": "grounded_d1", "overrides": {"selector_mode": "grounded", "dialectic_depth": 1}},
-        {"name": "grounded_d2", "overrides": {"selector_mode": "grounded", "dialectic_depth": 2}},
+        {"name": "argument_d0", "overrides": {"dialectic_depth": 0}},
+        {"name": "argument_d1", "overrides": {"dialectic_depth": 1}},
+        {"name": "argument_d2", "overrides": {"dialectic_depth": 2}},
         {
             "name": "argument_d2_no_positional",
-            "overrides": {"selector_mode": "argument", "dialectic_depth": 2, "positional_reasons": False},
+            "overrides": {"dialectic_depth": 2, "positional_reasons": False},
         },
         {
             "name": "argument_d2_no_smt",
-            "overrides": {"selector_mode": "argument", "dialectic_depth": 2, "smt_mate": False},
+            "overrides": {"dialectic_depth": 2, "smt_mate": False},
         },
         {
             "name": "argument_d2_no_fork",
-            "overrides": {"selector_mode": "argument", "dialectic_depth": 2, "smt_fork": False},
+            "overrides": {"dialectic_depth": 2, "smt_fork": False},
         },
         {
             "name": "argument_d2_search1",
             "overrides": {
-                "selector_mode": "argument",
                 "dialectic_depth": 2,
                 "search_depth": 1,
                 "search_backend": "alphabeta",
@@ -672,7 +657,6 @@ def experiment_matrix_cases(preset: str) -> list[dict[str, Any]]:
         {
             "name": "argument_d2_search1_no_fork",
             "overrides": {
-                "selector_mode": "argument",
                 "dialectic_depth": 2,
                 "search_depth": 1,
                 "search_backend": "alphabeta",
@@ -681,21 +665,7 @@ def experiment_matrix_cases(preset: str) -> list[dict[str, Any]]:
         },
         {
             "name": "argument_mate_theme_depth",
-            "overrides": {"selector_mode": "argument", "dialectic_depth_from_mate_theme": True},
-        },
-        {"name": "optimizer_static", "overrides": {"selector_mode": "optimizer", "dialectic_depth": 0}},
-        {"name": "optimizer_d2", "overrides": {"selector_mode": "optimizer", "dialectic_depth": 2}},
-        {
-            "name": "optimizer_d2_no_fork",
-            "overrides": {"selector_mode": "optimizer", "dialectic_depth": 2, "smt_fork": False},
-        },
-        {
-            "name": "optimizer_d2_no_positional",
-            "overrides": {"selector_mode": "optimizer", "dialectic_depth": 2, "positional_reasons": False},
-        },
-        {
-            "name": "optimizer_mate_theme_depth",
-            "overrides": {"selector_mode": "optimizer", "dialectic_depth_from_mate_theme": True},
+            "overrides": {"dialectic_depth_from_mate_theme": True},
         },
     ]
 
@@ -776,7 +746,6 @@ def score_board(
             search_backend=args.search_backend,
             smt_mate=args.smt_mate,
             smt_fork=getattr(args, "smt_fork", True),
-            selector_mode=args.selector_mode,
             positional_reasons=getattr(args, "positional_reasons", True),
             reply_analysis=reply_analysis_settings(args),
         )
@@ -913,12 +882,6 @@ def reply_analysis_settings(args: argparse.Namespace) -> ReplyAnalysisSettings:
     )
 
 
-def ablation_selector_modes(args: argparse.Namespace) -> tuple[str, ...]:
-    if args.selector_mode_ablation:
-        return tuple(sorted(SELECTOR_MODES))
-    return (args.selector_mode,)
-
-
 def settings(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "dialectic_depth": args.dialectic_depth,
@@ -927,7 +890,6 @@ def settings(args: argparse.Namespace) -> dict[str, Any]:
         "search_backend": args.search_backend,
         "smt_mate": args.smt_mate,
         "smt_fork": getattr(args, "smt_fork", True),
-        "selector_mode": args.selector_mode,
         "positional_reasons": getattr(args, "positional_reasons", True),
         "reply_analysis": {
             "max_replies": reply_analysis_settings(args).max_replies,

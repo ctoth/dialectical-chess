@@ -34,7 +34,6 @@ def test_fastchess_command_can_emit_diagnostic_pgn() -> None:
         dialectic_depth=2,
         search_depth=1,
         search_backend="alphabeta",
-        selector_mode="optimizer",
         reply_max_replies=64,
         reply_max_defense_nodes=1000,
         reply_min_defense_material=500,
@@ -49,7 +48,7 @@ def test_fastchess_command_can_emit_diagnostic_pgn() -> None:
     assert f"file={PROJECT_ROOT / 'scratch' / 'losses.pgn'}" in command
     assert "notation=uci" in command
     assert "append=false" in command
-    assert "args=run dialectical-chess-probe --uci --dialectic-depth 2 --search-depth 1 --search-backend alphabeta --selector-mode optimizer --reply-max-replies 64 --reply-max-defense-nodes 1000 --reply-min-defense-material 500 --no-smt-fork" in command
+    assert "args=run dialectical-chess-probe --uci --dialectic-depth 2 --search-depth 1 --search-backend alphabeta --reply-max-replies 64 --reply-max-defense-nodes 1000 --reply-min-defense-material 500 --no-smt-fork" in command
 
 
 def test_prepare_match_outputs_creates_relative_pgn_parent(

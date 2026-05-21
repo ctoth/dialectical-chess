@@ -40,7 +40,6 @@ def test_engine_settings_are_plain_serializable(
         "search_backend": search_backend,
         "smt_mate": smt_mate,
         "smt_fork": smt_fork,
-        "selector_mode": "argument",
         "positional_reasons": True,
         "reply_mate_scan": True,
         "reply_analysis": {
@@ -126,7 +125,6 @@ def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
                 promotion_value=0,
                 reasons=("fake:engine",),
                 objections=(),
-                optimizer_trace={"status": "optimal", "selected_candidate": "move:a1a8"},
             )
             return EngineDecision(move_uci="a1a8", selected=selected)
 
@@ -137,7 +135,6 @@ def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
         search_depth=0,
         search_backend="negamax",
         smt_mate=True,
-        selector_mode="argument",
         positional_reasons=True,
     )
 
@@ -145,7 +142,6 @@ def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
 
     assert result["selected_uci"] == "a1a8"
     assert result["reasons"] == ["fake:engine"]
-    assert result["optimizer_trace"]["status"] == "optimal"
 
 
 def test_uci_adapter_scores_through_engine(monkeypatch) -> None:
@@ -169,7 +165,6 @@ def test_uci_adapter_scores_through_engine(monkeypatch) -> None:
                 promotion_value=0,
                 reasons=("fake:uci",),
                 objections=(),
-                optimizer_trace={"status": "optimal", "selected_candidate": "move:a1a8"},
             )
             return EngineDecision(move_uci="a1a8", selected=selected)
 
@@ -180,7 +175,6 @@ def test_uci_adapter_scores_through_engine(monkeypatch) -> None:
 
     assert move == "a1a8"
     assert "info score cp 456 pv a1a8" in output.getvalue()
-    assert "info string optimizer_status=optimal" in output.getvalue()
 
 
 def test_uci_go_movetime_returns_within_budget_tolerance() -> None:

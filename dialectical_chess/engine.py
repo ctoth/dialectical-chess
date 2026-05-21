@@ -9,7 +9,6 @@ from dialectical_chess.arguments import (
     LARGE_SEARCH_REFUTATION_THRESHOLD,
     MoveProbe,
     RootArgumentGraph,
-    SELECTOR_MODES,
     build_root_argument_graph,
     choose_move,
 )
@@ -28,16 +27,11 @@ class EngineSettings:
     search_backend: str = "negamax"
     smt_mate: bool = True
     smt_fork: bool = True
-    selector_mode: str = "argument"
     positional_reasons: bool = True
     reply_mate_scan: bool = True
     reply_analysis: ReplyAnalysisSettings = ReplyAnalysisSettings()
     position_history: tuple[str, ...] = ()
     deadline: float | None = None
-
-    def __post_init__(self) -> None:
-        if self.selector_mode not in SELECTOR_MODES:
-            raise ValueError(f"unknown selector_mode: {self.selector_mode}")
 
 
 @dataclass(frozen=True)
@@ -81,7 +75,7 @@ class DialecticalChessEngine:
             )
         )
         graph = build_root_argument_graph(probes)
-        selected = choose_move(probes, graph, selector_mode=self.settings.selector_mode) if probes else None
+        selected = choose_move(probes, graph) if probes else None
         if uses_selected_reply_mate_refutation(self.settings):
             probes, graph, selected = selected_reply_mate_refutation_fixpoint(
                 board,
@@ -89,7 +83,6 @@ class DialecticalChessEngine:
             graph,
             selected,
             allow_mate_four=self.settings.reply_mate_scan,
-            selector_mode=self.settings.selector_mode,
             deadline=self.settings.deadline,
         )
         decision = EngineDecision(
@@ -109,7 +102,6 @@ def selected_reply_mate_refutation_fixpoint(
     selected: MoveProbe | None,
     *,
     allow_mate_four: bool,
-    selector_mode: str,
     deadline: float | None = None,
 ) -> tuple[list[MoveProbe], RootArgumentGraph, MoveProbe | None]:
     move_by_uci = {move.uci(): move for move in board.legal_moves()}
@@ -141,7 +133,7 @@ def selected_reply_mate_refutation_fixpoint(
             for probe in probes
         ]
         graph = build_root_argument_graph(probes)
-        selected = choose_move(probes, graph, selector_mode=selector_mode) if probes else None
+        selected = choose_move(probes, graph) if probes else None
     return probes, graph, selected
 
 

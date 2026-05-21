@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import io
 from pathlib import Path
 
 import pytest
@@ -17,7 +16,6 @@ from dialectical_chess.arguments import (  # noqa: E402
     choose_move,
 )
 from dialectical_chess.bench import (  # noqa: E402
-    ablation_selector_modes,
     dialectic_depth_for_lichess_row,
     mate_theme_depth,
     run_lichess,
@@ -46,10 +44,7 @@ from dialectical_chess.search import (  # noqa: E402
     owned_is_checkmate,
 )
 from dialectical_chess.smt import smt_fork_moves, smt_mate_in_one_moves  # noqa: E402
-from dialectical_chess.uci import choose_uci_move, parse_uci_position_state  # noqa: E402
-
-
-SELECTOR_MODES = ("argument", "score", "grounded", "support", "categoriser", "optimizer")
+from dialectical_chess.uci import parse_uci_position_state  # noqa: E402
 
 
 def quiet_probe(uci: str, score: int, reasons: tuple[str, ...] = ()) -> MoveProbe:
@@ -112,53 +107,6 @@ def test_reporting_positional_comorphism_excludes_piece_safety() -> None:
     assert not is_tactical_reason("material:exchange_nonnegative:e4d5")
 
 
-def test_score_selector_ignores_argument_support() -> None:
-    supported = quiet_probe("a2a3", 10, ("development:minor_piece",))
-    high_score = quiet_probe("h2h4", 100)
-    probes = [supported, high_score]
-
-    graph = build_root_argument_graph(probes)
-
-    assert choose_move(probes, graph, selector_mode="argument") == supported
-    assert choose_move(probes, graph, selector_mode="score") == high_score
-
-
-def test_optimizer_selector_prefers_unrefuted_move_over_higher_score() -> None:
-    """Optimizer selector should minimize unresolved reply attacks before base score."""
-    refuted = MoveProbe(
-        uci="h2h4",
-        san="h2h4",
-        score=999,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("development:h2h4:space",),
-        objections=(),
-        reply_attacks=("reply_captures_moved_piece:undefended:h2h4:100",),
-    )
-    quiet = MoveProbe(
-        uci="g2g3",
-        san="g2g3",
-        score=10,
-        is_checkmate=False,
-        gives_check=False,
-        is_capture=False,
-        captured_value=0,
-        promotion_value=0,
-        reasons=("development:g2g3:space",),
-        objections=(),
-    )
-    probes = [refuted, quiet]
-    graph = build_root_argument_graph(probes)
-
-    selected = choose_move(probes, graph, selector_mode="optimizer")
-
-    assert selected.uci == quiet.uci
-    assert selected.optimizer_trace["status"] == "optimal"
-
-
 def test_argument_selector_prefers_tactical_support_over_positional_count() -> None:
     """Mined positional deltas show shallow support counts can bury tactical moves."""
     positional = quiet_probe(
@@ -185,7 +133,7 @@ def test_argument_selector_prefers_tactical_support_over_positional_count() -> N
     probes = [positional, tactical]
     graph = build_root_argument_graph(probes)
 
-    selected = choose_move(probes, graph, selector_mode="argument")
+    selected = choose_move(probes, graph)
 
     assert selected.uci == "e5f6"
 
@@ -195,7 +143,6 @@ def test_argument_selector_uses_effective_score_before_raw_material_tie_break() 
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -212,7 +159,6 @@ def test_argument_selector_keeps_piece_safety_score_in_tactical_mode() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=2,
             search_depth=0,
             search_backend="alphabeta",
@@ -229,7 +175,6 @@ def test_exchange_nonnegative_does_not_count_as_extra_tactical_support() -> None
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -263,7 +208,6 @@ def test_argument_selector_rejects_opening_minor_retreat() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -280,7 +224,6 @@ def test_argument_selector_rejects_hanging_checking_minor_move() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -297,7 +240,6 @@ def test_argument_selector_requires_strong_compensation_for_hanging_minor() -> N
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -333,7 +275,6 @@ def test_argument_selector_saves_hanging_minor() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -358,7 +299,6 @@ def test_argument_selector_rejects_opening_king_walk() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -391,7 +331,6 @@ def test_argument_selector_prefers_back_rank_check_evasion() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -431,7 +370,7 @@ def test_king_walk_objection_beats_tactical_count_tie_breaks() -> None:
     probes = [king_walk, safe]
     graph = build_root_argument_graph(probes)
 
-    assert choose_move(probes, graph, selector_mode="argument") == safe
+    assert choose_move(probes, graph) == safe
 
 
 def test_early_rook_shuffle_gets_opening_objection() -> None:
@@ -447,7 +386,6 @@ def test_argument_selector_rejects_early_rook_shuffle() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -479,7 +417,6 @@ def test_argument_selector_rejects_trapped_queen_capture() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -519,7 +456,7 @@ def test_premature_queen_objection_beats_tactical_count_tie_breaks() -> None:
     probes = [queen_move, safe]
     graph = build_root_argument_graph(probes)
 
-    assert choose_move(probes, graph, selector_mode="argument") == safe
+    assert choose_move(probes, graph) == safe
 
 
 def test_premature_minor_check_gets_development_objection() -> None:
@@ -542,7 +479,6 @@ def test_argument_selector_rejects_premature_minor_check() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -559,7 +495,6 @@ def test_argument_selector_rejects_search_proven_forced_mate() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -598,7 +533,6 @@ def test_depth_zero_checks_forced_reply_mate_for_top_candidates() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
@@ -629,7 +563,6 @@ def test_depth_zero_candidate_scan_runs_with_dialectic_reply_analysis() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=2,
             search_depth=0,
             search_backend="alphabeta",
@@ -688,7 +621,6 @@ def test_depth_zero_checks_forced_reply_mate_for_top_king_moves() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
@@ -719,7 +651,6 @@ def test_depth_zero_checks_mate_three_when_legal_moves_are_sparse() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
@@ -749,7 +680,6 @@ def test_pawn_move_can_create_king_escape_square() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
@@ -766,7 +696,6 @@ def test_argument_selector_rejects_reply_mate_without_search_depth() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=0,
             smt_mate=False,
@@ -782,7 +711,6 @@ def test_argument_selector_rejects_reply_mate_at_low_search_depth() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -799,7 +727,6 @@ def test_low_search_depth_checks_reply_mate_for_king_moves() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -816,7 +743,6 @@ def test_low_search_depth_checks_reply_mate_for_minor_retreats() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -833,7 +759,6 @@ def test_low_search_depth_checks_reply_mate_for_material_captures() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -863,7 +788,6 @@ def test_low_search_depth_checks_reply_mate_for_major_piece_threats() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -893,7 +817,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_late_king_moves() -> None
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -923,7 +846,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_en_pris_threats() -> None
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -953,7 +875,6 @@ def test_forced_reply_mate_scan_covers_argument_supported_candidates() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -983,7 +904,6 @@ def test_forced_reply_mate_scan_covers_large_search_refutations() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -1000,7 +920,6 @@ def test_argument_selector_falls_back_when_grounded_candidates_are_forced_mates(
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -1030,7 +949,6 @@ def test_forced_reply_mate_scan_covers_refuted_major_relocations() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -1060,7 +978,6 @@ def test_low_search_depth_checks_forced_reply_mate_in_two_for_candidates() -> No
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1090,7 +1007,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_refuted_pawn_threats() ->
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1120,7 +1036,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_deeply_refuted_pawn_pushe
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1150,7 +1065,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_deeply_refuted_flank_pawn
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1180,7 +1094,6 @@ def test_low_search_depth_checks_mate_three_for_forced_check_escapes() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1210,7 +1123,6 @@ def test_low_search_depth_checks_mate_three_for_deeply_refuted_rook_moves() -> N
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1240,7 +1152,6 @@ def test_low_search_depth_checks_immediate_reply_mate_for_search_refuted_quiet_m
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1271,7 +1182,6 @@ def test_search_supported_captures_can_be_refuted_by_forced_reply_mate() -> None
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -1301,7 +1211,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_refuted_center_pawn_devel
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1331,7 +1240,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_king_moves() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1361,7 +1269,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_refuted_queen_moves() -> 
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1391,7 +1298,6 @@ def test_low_search_depth_checks_forced_reply_mate_for_mildly_refuted_threats() 
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=1,
             search_backend="alphabeta",
@@ -1454,7 +1360,7 @@ def test_argument_selector_rejects_castled_flank_pawn_weakening() -> None:
     probes = [weakening, safe]
     graph = build_root_argument_graph(probes)
 
-    assert choose_move(probes, graph, selector_mode="argument") == safe
+    assert choose_move(probes, graph) == safe
 
 
 def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
@@ -1462,7 +1368,6 @@ def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -1498,7 +1403,6 @@ def test_argument_selector_answers_advanced_flank_pawn() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=2,
             search_depth=1,
             search_backend="alphabeta",
@@ -1523,7 +1427,6 @@ def test_argument_selector_rejects_queen_flank_invasion() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -1560,7 +1463,6 @@ def test_argument_d2_solves_mined_positional_regressions(
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=2,
             positional_reasons=True,
         )
@@ -1569,105 +1471,19 @@ def test_argument_d2_solves_mined_positional_regressions(
     assert decision.move_uci == expected_uci
 
 
-@pytest.mark.parametrize(
-    ("puzzle_id", "fen", "expected_uci", "rejected_uci"),
-    [
-        (
-            "002IE",
-            "r3brk1/5pp1/p1nqpn1p/P2pN3/2pP4/2P1PN2/5PPP/RB1QK2R b KQ - 4 16",
-            "c6e5",
-            "d6e5",
-        ),
-        (
-            "00H1C",
-            "r3r3/1kpRnqpp/p4p2/Qp2P2P/1N6/4Pb2/PPP3P1/2K2R2 b - - 0 22",
-            None,
-            "f7h5",
-        ),
-    ],
-)
-def test_optimizer_d2_solves_mined_positional_regressions(
-    puzzle_id: str,
-    fen: str,
-    expected_uci: str | None,
-    rejected_uci: str,
-) -> None:
-    assert puzzle_id
-    board = owned_board_from_fen(fen)
-
-    baseline = DialecticalChessEngine(
-        EngineSettings(
-            selector_mode="optimizer",
-            dialectic_depth=2,
-            positional_reasons=False,
-        )
-    ).choose_move(board)
-
-    decision = DialecticalChessEngine(
-        EngineSettings(
-            selector_mode="optimizer",
-            dialectic_depth=2,
-            positional_reasons=True,
-        )
-    ).choose_move(board)
-
-    if expected_uci is not None:
-        assert decision.move_uci == expected_uci
-    assert baseline.move_uci != rejected_uci
-    assert decision.move_uci != rejected_uci
-    assert decision.selected is not None
-    assert decision.selected.optimizer_trace["status"] == "optimal"
-    assert "positional_support_effective" in decision.selected.optimizer_trace["objective_values"]
-    assert decision.selected.optimizer_trace["positional_support_mode"] in {
-        "quiet",
-        "tactical_gated",
-        "disabled",
-    }
-
-
-@given(st.sampled_from(SELECTOR_MODES))
-def test_engine_settings_accept_supported_selector_modes(mode: str) -> None:
-    settings = EngineSettings(selector_mode=mode)
-
-    assert settings.selector_mode == mode
-
-
-def test_engine_settings_reject_unknown_selector_mode() -> None:
-    with pytest.raises(ValueError, match="selector_mode"):
-        EngineSettings(selector_mode="unknown")
-
-
-def test_bench_settings_report_selector_mode() -> None:
+def test_bench_settings_report_single_argument_selector_shape() -> None:
     args = argparse.Namespace(
         dialectic_depth=1,
         search_depth=2,
         search_backend="alphabeta",
         smt_mate=False,
         smt_fork=False,
-        selector_mode="support",
         positional_reasons=False,
     )
 
-    assert bench_settings(args)["selector_mode"] == "support"
+    assert "selector_mode" not in bench_settings(args)
     assert bench_settings(args)["positional_reasons"] is False
     assert bench_settings(args)["smt_fork"] is False
-
-
-def test_ablation_selector_modes_are_explicitly_gated() -> None:
-    default_args = argparse.Namespace(selector_mode="argument", selector_mode_ablation=False)
-    ablation_args = argparse.Namespace(selector_mode="argument", selector_mode_ablation=True)
-
-    assert ablation_selector_modes(default_args) == ("argument",)
-    assert set(ablation_selector_modes(ablation_args)) == set(SELECTOR_MODES)
-
-
-def test_uci_info_reports_selector_mode() -> None:
-    board = owned_board_from_fen("7k/6pp/8/8/8/8/6PP/R5K1 w - - 0 1")
-    output = io.StringIO()
-
-    choose_uci_move(board, settings=EngineSettings(selector_mode="score"), output_stream=output)
-
-    assert "info string selector_mode=score" in output.getvalue()
 
 
 def test_lichess_summary_reports_rating_bucket_totals() -> None:
@@ -1684,7 +1500,6 @@ def test_lichess_summary_reports_rating_bucket_totals() -> None:
         search_depth=0,
         search_backend="negamax",
         smt_mate=True,
-        selector_mode="argument",
         progress_every=0,
     )
 
@@ -1708,7 +1523,6 @@ def test_lichess_runner_reports_progress(capsys: pytest.CaptureFixture[str]) -> 
         search_depth=0,
         search_backend="negamax",
         smt_mate=True,
-        selector_mode="argument",
         positional_reasons=True,
         progress_every=1,
     )
@@ -1736,8 +1550,6 @@ def test_tactical_witness_comparison_reports_named_variants_and_deltas() -> None
         search_backend="negamax",
         smt_mate=True,
         smt_fork=True,
-        selector_mode="argument",
-        selector_mode_ablation=False,
         positional_reasons=True,
         progress_every=0,
         reply_max_replies=128,
@@ -1858,7 +1670,6 @@ def test_unsupported_major_drift_rejects_mined_queen_shuffle() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
@@ -1888,7 +1699,6 @@ def test_unsupported_major_drift_rejects_file_control_queen_shuffle() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=2,
             search_depth=1,
             search_backend="alphabeta",
@@ -1925,7 +1735,6 @@ def test_threefold_repetition_gets_history_objection() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=2,
             search_depth=1,
             search_backend="alphabeta",
@@ -1960,7 +1769,6 @@ def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
@@ -1990,7 +1798,6 @@ def test_forcing_capture_compensates_moved_piece_en_pris_objection() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=0,
             search_backend="alphabeta",
@@ -2015,7 +1822,6 @@ def test_argument_d2_rejects_mined_noisy_fork_when_capture_is_better() -> None:
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=2,
             smt_fork=True,
         )
@@ -2047,7 +1853,6 @@ def test_argument_selector_rejects_large_search_refuted_material_sacrifice() -> 
 
     decision = DialecticalChessEngine(
         EngineSettings(
-            selector_mode="argument",
             dialectic_depth=0,
             search_depth=2,
             search_backend="alphabeta",
@@ -2182,8 +1987,6 @@ def test_experiment_matrix_runs_named_lichess_cases() -> None:
         search_depth=0,
         search_backend="negamax",
         smt_mate=True,
-        selector_mode="argument",
-        selector_mode_ablation=False,
         positional_reasons=True,
         progress_every=0,
         matrix_preset="smoke",
@@ -2199,23 +2002,9 @@ def test_experiment_matrix_runs_named_lichess_cases() -> None:
     assert [run["name"] for run in payload["runs"]] == [
         "argument_d0",
         "argument_d1",
-        "score_static",
         "argument_mate_theme_depth",
     ]
     assert payload["sample"]["total"] == 2
-
-
-def test_core_experiment_matrix_includes_optimizer_rows() -> None:
-    from dialectical_chess.bench import experiment_matrix_cases
-
-    names = {case["name"] for case in experiment_matrix_cases("core")}
-
-    assert {
-        "optimizer_static",
-        "optimizer_d2",
-        "optimizer_d2_no_positional",
-        "optimizer_mate_theme_depth",
-    } <= names
 
 
 def test_core_experiment_matrix_includes_no_fork_rows() -> None:
@@ -2226,7 +2015,6 @@ def test_core_experiment_matrix_includes_no_fork_rows() -> None:
     assert {
         "argument_d2_no_fork",
         "argument_d2_search1_no_fork",
-        "optimizer_d2_no_fork",
     } <= names
 
 
@@ -2441,7 +2229,6 @@ def test_selected_shallow_search_fork_is_reranked_when_mate_in_four_refutes_it()
             search_backend="alphabeta",
             smt_mate=True,
             smt_fork=True,
-            selector_mode="argument",
             positional_reasons=True,
         )
     ).analyze(board)
@@ -2480,7 +2267,6 @@ def test_selected_shallow_search_rook_move_is_reranked_when_mate_in_four_refutes
             search_backend="alphabeta",
             smt_mate=True,
             smt_fork=True,
-            selector_mode="argument",
             positional_reasons=True,
         )
     ).analyze(board)
