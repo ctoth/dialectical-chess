@@ -6,9 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from dialectical_chess.evidence import ArgumentEvidence, reply_evidence
+from dialectical_chess.tuning import PIECE_VALUE
 
 
-OWNED_PIECE_VALUE = {"p": 100, "n": 320, "b": 330, "r": 500, "q": 900, "k": 0}
+OWNED_PIECE_VALUE = PIECE_VALUE
 
 
 @dataclass(frozen=True)

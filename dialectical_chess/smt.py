@@ -14,6 +14,7 @@ from dialectical_chess.board import (
     square_from_file_rank,
 )
 from dialectical_chess.search import owned_is_checkmate
+from dialectical_chess.tuning import PIECE_VALUE
 
 
 @dataclass(frozen=True)
@@ -153,4 +154,4 @@ def ray_attacks_square(board: Any, source_square: int, target_square: int, delta
 
 
 def piece_value(piece: str) -> int:
-    return {"p": 100, "n": 320, "b": 330, "r": 500, "q": 900, "k": 0}[piece.lower()]
+    return PIECE_VALUE[piece.lower()]

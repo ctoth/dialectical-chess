@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TypeAlias
 
+from dialectical_chess.tuning import (
+    COMPENSATING_TACTICAL_THREAT_THRESHOLD,
+    LARGE_SEARCH_REFUTATION_THRESHOLD,
+)
+
 
 class EvidenceWorld(str, Enum):
     POSITIONAL = "positional"
@@ -430,8 +435,6 @@ TACTICAL_REASON_PREFIXES = (
     "search:",
     "search_support:",
 )
-COMPENSATING_TACTICAL_THREAT_THRESHOLD = 700
-LARGE_SEARCH_REFUTATION_THRESHOLD = -500
 
 def is_argument_positional_reason(reason: str) -> bool:
     return reason.startswith(ARGUMENT_POSITIONAL_REASON_PREFIXES)

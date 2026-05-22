@@ -47,6 +47,21 @@ from dialectical_chess.smt import (
     smt_fork_witnesses,
     smt_mate_in_one_moves,
 )
+from dialectical_chess.tuning import (
+    CHECKMATE_SCORE,
+    CHECK_SCORE,
+    KING_ESCAPE_SCORE,
+    LARGE_SEARCH_REFUTATION_THRESHOLD,
+    MAJOR_PIECE_VALUE,
+    MINOR_PIECE_VALUE,
+    MOVED_PIECE_DEFENDED_SCORE,
+    POSITIONAL_REASON_SCORE,
+    QUEEN_BLUNDER_EXCHANGE_THRESHOLD,
+    QUEEN_VALUE,
+    REPLY_MATE_REFUTATION_SCORE,
+    SEARCH_REPLY_MATE_TRIGGER_SCORE,
+    UNSUPPORTED_MAJOR_DRIFT_PENALTY,
+)
 
 
 @dataclass(frozen=True)
@@ -123,17 +138,17 @@ def objection(
 
 
 def search_refutation_strength(score: int) -> int:
-    if score <= -100_000:
+    if score <= REPLY_MATE_REFUTATION_SCORE:
         return 6
-    if score <= -500:
+    if score <= LARGE_SEARCH_REFUTATION_THRESHOLD:
         return 1
     return 0
 
 
 def material_support_strength(value: int) -> int:
-    if value >= 500:
+    if value >= MAJOR_PIECE_VALUE:
         return 9
-    if value >= 300:
+    if value >= MINOR_PIECE_VALUE:
         return 6
     if value > 0:
         return 3
@@ -141,9 +156,9 @@ def material_support_strength(value: int) -> int:
 
 
 def defended_piece_support_strength(value: int) -> int:
-    if value >= 900:
+    if value >= QUEEN_VALUE:
         return 4
-    if value >= 500:
+    if value >= MAJOR_PIECE_VALUE:
         return 3
     return 1
 
@@ -214,7 +229,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         score = 0
 
         if is_checkmate:
-            score += 1_000_000
+            score += CHECKMATE_SCORE
             label = "terminal:checkmate"
             reasons.append(label)
             reason_evidence.append(
@@ -231,7 +246,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             objections.extend(draw.labels)
             objection_evidence_items.extend(draw.evidence)
         if not is_draw and gives_check:
-            score += 1_000
+            score += CHECK_SCORE
             label = "tactical:check"
             reasons.append(label)
             reason_evidence.append(
@@ -355,12 +370,12 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         if not is_draw and settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
             if positional.labels:
-                score += 25 * len(positional.labels)
+                score += POSITIONAL_REASON_SCORE * len(positional.labels)
                 reasons.extend(positional.labels)
                 reason_evidence.extend(positional.evidence)
         smt_witnesses: list[str] = []
         if not is_draw and move.uci() in smt_mate_moves:
-            score += 1_000_000
+            score += CHECKMATE_SCORE
             label = "procedural:mate_in_one"
             reasons.append(label)
             reason_evidence.append(
@@ -437,7 +452,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
             score += search_result.score
             if (
                 settings.search.depth == 1
-                and search_result.score <= -700
+                and search_result.score <= SEARCH_REPLY_MATE_TRIGGER_SCORE
                 and settings.reply_mate_scan
                 and not has_reply_mate_in_one_objection(objection_evidence_items)
             ):
@@ -542,7 +557,7 @@ def unsupported_major_drift_objections(
                 strength=1,
             ),
         ),
-        -300,
+        UNSUPPORTED_MAJOR_DRIFT_PENALTY,
     )
 
 
@@ -594,7 +609,7 @@ def king_escape_square_reasons(
                 strength=1,
             ),
         ),
-        300,
+        KING_ESCAPE_SCORE,
     )
 
 
@@ -694,7 +709,7 @@ def moved_piece_safety_labels(
                 defended_piece_value=moved_value,
             )
         )
-        score += 15
+        score += MOVED_PIECE_DEFENDED_SCORE
     if en_pris:
         exchange_gain = captured_value + promotion_value - moved_value
         if gives_check and exchange_gain >= -100:
@@ -723,7 +738,7 @@ def moved_piece_safety_labels(
                 )
             )
             score += exchange_gain
-            if moved_value >= OWNED_PIECE_VALUE["q"] and exchange_gain <= -300:
+            if moved_value >= OWNED_PIECE_VALUE["q"] and exchange_gain <= QUEEN_BLUNDER_EXCHANGE_THRESHOLD:
                 label = f"safety:queen_blunder:{move.uci()}:{-exchange_gain}"
                 objections.append(label)
                 objection_evidence_items.append(
@@ -759,7 +774,7 @@ def moved_piece_threat_labels(
             value = OWNED_PIECE_VALUE[piece.lower()]
             targets.append(value)
     target_value = sum(targets)
-    if target_value < 500:
+    if target_value < MAJOR_PIECE_VALUE:
         return EvidenceLabels(())
     label = f"tactical:threat:targets:{len(targets)}:value:{target_value}"
     return EvidenceLabels(
@@ -1183,7 +1198,7 @@ def reply_mate_in_one_objections(
             )
             for label in labels
         ),
-        -100_000,
+        REPLY_MATE_REFUTATION_SCORE,
     )
 
 
@@ -1213,7 +1228,7 @@ def reply_forced_mate_objections(
                 argument_value="reply_refutation",
             ),
         ),
-        -100_000,
+        REPLY_MATE_REFUTATION_SCORE,
     )
 
 
@@ -1408,7 +1423,7 @@ def forced_reply_mate_depths(
     if (
         search_depth == 1
         and legal_move_count <= 20
-        and has_search_refutation_at_most(list(probe.objection_evidence), -700)
+        and has_search_refutation_at_most(list(probe.objection_evidence), SEARCH_REPLY_MATE_TRIGGER_SCORE)
     ):
         return (2, 3)
     if search_depth in {0, 1}:
@@ -1499,13 +1514,13 @@ def should_scan_reply_forced_mate(
             legal_move_count is not None
             and legal_move_count <= 2
             and board.in_check(board.turn)
-            and has_search_refutation_at_most(objection_evidence, -700)
+            and has_search_refutation_at_most(objection_evidence, SEARCH_REPLY_MATE_TRIGGER_SCORE)
         ):
             return True
         if (
             legal_move_count is not None
             and legal_move_count <= 20
-            and has_search_refutation_at_most(objection_evidence, -700)
+            and has_search_refutation_at_most(objection_evidence, SEARCH_REPLY_MATE_TRIGGER_SCORE)
         ):
             return True
         has_threat_reason = has_tactical_threat_reason(reason_evidence)
@@ -1515,7 +1530,7 @@ def should_scan_reply_forced_mate(
             and has_search_refutation_at_most(objection_evidence, -100)
         ):
             return True
-        return has_search_refutation_at_most(objection_evidence, -700) and (
+        return has_search_refutation_at_most(objection_evidence, SEARCH_REPLY_MATE_TRIGGER_SCORE) and (
             piece.lower() != "p" or has_threat_reason
         )
     if piece.lower() == "k":
