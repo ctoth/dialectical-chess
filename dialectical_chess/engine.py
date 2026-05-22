@@ -10,7 +10,13 @@ from dialectical_chess.arguments import (
     MoveProbe,
     choose_move,
 )
-from dialectical_chess.evidence import LARGE_SEARCH_REFUTATION_THRESHOLD, to_argument_evidence
+from dialectical_chess.evidence import (
+    LARGE_SEARCH_REFUTATION_THRESHOLD,
+    ArgumentEvidence,
+    EvidenceWorld,
+    ObjectionKind,
+    objection_evidence,
+)
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.probe import ensure_owned_board, probe_moves
 from dialectical_chess.search import ReplyAnalysisSettings
@@ -105,22 +111,24 @@ def selected_reply_mate_refutation_fixpoint(
     while selected is not None and selected.uci not in refuted:
         if deadline is not None and time.monotonic() >= deadline:
             break
-        objection = selected_reply_mate_refutation(
+        refutation = selected_reply_mate_refutation(
             board,
             move_by_uci,
             selected,
             mate_depths=selected_reply_mate_depths(selected, allow_mate_four=allow_mate_four),
             deadline=deadline,
         )
-        if objection is None:
+        if refutation is None:
             break
         refuted.add(selected.uci)
+        objection_label, objection = refutation
         probes = [
             replace(
                 probe,
-                objections=probe.objections + (objection,),
+                objections=probe.objections + (objection_label,),
+                objection_evidence=probe.objection_evidence + (objection,),
             )
-            if probe.uci == selected.uci and objection not in probe.objections
+            if probe.uci == selected.uci and objection_label not in probe.objections
             else probe
             for probe in probes
         ]
@@ -139,8 +147,8 @@ def selected_reply_mate_depths(
 
 
 def selected_has_large_search_refutation(selected: MoveProbe) -> bool:
-    for objection in selected.objections:
-        score = to_argument_evidence(objection).search_refutation_score
+    for objection in selected.objection_evidence:
+        score = objection.search_refutation_score
         if score is not None and score <= LARGE_SEARCH_REFUTATION_THRESHOLD:
             return True
     return False
@@ -159,10 +167,10 @@ def selected_reply_mate_refutation(
     *,
     mate_depths: tuple[int, ...],
     deadline: float | None = None,
-) -> str | None:
+) -> tuple[str, ArgumentEvidence] | None:
     if selected.is_checkmate:
         return None
-    if any(objection.startswith("tactical:allows_reply_forced_mate_in_") for objection in selected.objections):
+    if any(objection.forced_mate_distance is not None for objection in selected.objection_evidence):
         return None
     move = move_by_uci.get(selected.uci)
     if move is None:
@@ -172,5 +180,16 @@ def selected_reply_mate_refutation(
         if deadline is not None and time.monotonic() >= deadline:
             break
         if has_forced_mate(child, mate_depth=mate_depth, deadline=deadline):
-            return f"tactical:allows_reply_forced_mate_in_{mate_depth}:{selected.uci}"
+            label = f"tactical:allows_reply_forced_mate_in_{mate_depth}:{selected.uci}"
+            return (
+                label,
+                objection_evidence(
+                    label,
+                    world=EvidenceWorld.TACTICAL,
+                    objection_kind=ObjectionKind.REPLY_FORCED_MATE,
+                    objection_strength=6 if mate_depth == 2 else 3,
+                    forced_mate_distance=mate_depth,
+                    argument_value="reply_refutation",
+                ),
+            )
     return None

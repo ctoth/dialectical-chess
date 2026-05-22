@@ -20,14 +20,11 @@ from dialectical_chess.bench import (  # noqa: E402
     summarize_lichess_rows,
 )
 from dialectical_chess.evidence import (  # noqa: E402
-    EvidenceWorld,
     is_argument_positional_reason,
     is_report_positional_reason,
     is_tactical_reason,
-    to_argument_evidence,
 )
 from dialectical_chess.probe import owned_board_from_fen, probe_moves  # noqa: E402
-from dialectical_chess.probe import has_search_refutation_at_most  # noqa: E402
 from dialectical_chess.engine import EngineSettings  # noqa: E402
 from dialectical_chess.engine import DialecticalChessEngine  # noqa: E402
 from dialectical_chess.search import (  # noqa: E402
@@ -38,20 +35,6 @@ from dialectical_chess.search import (  # noqa: E402
 )
 from dialectical_chess.smt import smt_fork_moves, smt_mate_in_one_moves  # noqa: E402
 from dialectical_chess.uci import parse_uci_position_state  # noqa: E402
-
-
-def test_evidence_comorphism_classifies_worlds_for_argumentation() -> None:
-    positional = to_argument_evidence("piece_safety:defended:e7e8:900")
-    search_line = to_argument_evidence("search_line:e2e4-e7e5")
-    smt_summary = to_argument_evidence("smt:fork:3:1330")
-
-    assert positional.world == EvidenceWorld.POSITIONAL
-    assert positional.counts_as_positional
-    assert not positional.counts_as_tactical
-    assert search_line.world == EvidenceWorld.SEARCH
-    assert not search_line.supports_argument
-    assert smt_summary.world == EvidenceWorld.SMT
-    assert smt_summary.counts_as_tactical
 
 
 def test_reporting_positional_comorphism_excludes_piece_safety() -> None:
@@ -1583,10 +1566,6 @@ def test_threefold_repetition_gets_history_objection() -> None:
     ).choose_move(board)
 
     assert decision.move_uci != "g1f3"
-
-
-def test_malformed_search_refutation_label_is_ignored() -> None:
-    assert not has_search_refutation_at_most(["search_refutes:alphabeta:not-an-int"], -500)
 
 
 def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:

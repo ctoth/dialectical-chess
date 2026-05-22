@@ -64,9 +64,13 @@ from dialectical_chess.static_prior import (  # noqa: E402
 # --- `dialectical_chess` modules that already exist — importable today. ---
 from dialectical_chess.arguments import MoveProbe  # noqa: E402
 from dialectical_chess.evidence import (  # noqa: E402
+    EvidenceWorld,
     ObjectionKind,
+    SupportKind,
+    objection_evidence,
+    reply_evidence,
+    support_evidence,
     is_forced_mate_refutation,
-    to_argument_evidence,
 )
 from dialectical_chess.probe import owned_board_from_fen, probe_moves  # noqa: E402
 
@@ -109,7 +113,114 @@ def make_probe(
         reasons=reasons,
         objections=objections,
         reply_attacks=reply_attacks,
+        reason_evidence=tuple(synthetic_reason_evidence(label) for label in reasons),
+        objection_evidence=tuple(synthetic_objection_evidence(label) for label in objections),
+        reply_attack_evidence=tuple(synthetic_reply_evidence(label) for label in reply_attacks),
     )
+
+
+def synthetic_reason_evidence(label: str):
+    if label.startswith("development:"):
+        return support_evidence(
+            label,
+            world=EvidenceWorld.POSITIONAL,
+            counts_as_positional=True,
+            argument_value="positional",
+            support_strength=1,
+            support_kind=SupportKind.DEVELOPMENT,
+        )
+    if label.startswith("center_control:") or label.startswith("piece_activity:"):
+        return support_evidence(
+            label,
+            world=EvidenceWorld.POSITIONAL,
+            counts_as_positional=True,
+            argument_value="positional",
+            support_strength=1,
+        )
+    if label.startswith("material:capture:900"):
+        return support_evidence(label, world=EvidenceWorld.MATERIAL, counts_as_tactical=True, argument_value="tactical", support_strength=9)
+    if label.startswith("material:capture:500"):
+        return support_evidence(label, world=EvidenceWorld.MATERIAL, counts_as_tactical=True, argument_value="tactical", support_strength=9)
+    if label == "tactical:check":
+        return support_evidence(label, world=EvidenceWorld.TACTICAL, counts_as_tactical=True, argument_value="tactical", support_strength=7)
+    if label.startswith("tactical:threat:"):
+        return support_evidence(
+            label,
+            world=EvidenceWorld.TACTICAL,
+            counts_as_tactical=True,
+            argument_value="tactical",
+            support_strength=6,
+            tactical_threat_value=900,
+        )
+    return support_evidence(label, world=EvidenceWorld.PROCEDURAL)
+
+
+def synthetic_objection_evidence(label: str):
+    if label == "objection:no_immediate_tactical_warrant":
+        return objection_evidence(
+            label,
+            world=EvidenceWorld.PROCEDURAL,
+            objection_kind=ObjectionKind.NO_IMMEDIATE_TACTICAL_WARRANT,
+            objection_strength=0,
+        )
+    if label.startswith("safety:moved_piece_en_pris:"):
+        value = int(label.rsplit(":", 1)[1])
+        return objection_evidence(
+            label,
+            world=EvidenceWorld.MATERIAL,
+            objection_kind=ObjectionKind.MOVED_PIECE_EN_PRIS,
+            objection_strength=0 if value < 300 else 97 if value >= 900 else 17,
+            moved_piece_en_pris_value=value,
+            argument_value="material_safety",
+        )
+    if label.startswith("safety:queen_blunder:"):
+        return objection_evidence(
+            label,
+            world=EvidenceWorld.MATERIAL,
+            objection_kind=ObjectionKind.QUEEN_BLUNDER,
+            objection_strength=2,
+            argument_value="material_safety",
+        )
+    if label.startswith("king_safety:queen_flank_invasion:"):
+        return objection_evidence(
+            label,
+            world=EvidenceWorld.POSITIONAL,
+            objection_kind=ObjectionKind.QUEEN_FLANK_INVASION,
+            objection_strength=9,
+        )
+    if label.startswith("tactical:allows_reply_mate_in_one:"):
+        return objection_evidence(
+            label,
+            world=EvidenceWorld.TACTICAL,
+            objection_kind=ObjectionKind.REPLY_MATE_IN_ONE,
+            objection_strength=6,
+            forced_mate_distance=1,
+            argument_value="reply_refutation",
+        )
+    if label.startswith("tactical:allows_reply_forced_mate_in_"):
+        depth = int(label.removeprefix("tactical:allows_reply_forced_mate_in_").split(":", 1)[0])
+        return objection_evidence(
+            label,
+            world=EvidenceWorld.TACTICAL,
+            objection_kind=ObjectionKind.REPLY_FORCED_MATE,
+            objection_strength=6 if depth == 2 else 3,
+            forced_mate_distance=depth,
+            argument_value="reply_refutation",
+        )
+    return objection_evidence(
+        label,
+        world=EvidenceWorld.UNKNOWN,
+        objection_kind=ObjectionKind.NO_IMMEDIATE_TACTICAL_WARRANT,
+        objection_strength=0,
+    )
+
+
+def synthetic_reply_evidence(label: str):
+    if label.startswith("reply_mate:undefended:"):
+        return reply_evidence(label, reply_attack_strength=7, forced_mate_distance=1)
+    if label.startswith("reply_mate:defended:"):
+        return reply_evidence(label, reply_attack_strength=7, defense_strength=13)
+    return reply_evidence(label, reply_attack_strength=1)
 
 
 def expectation_of(decision: ArgumentationDecision, uci: str) -> float:
@@ -443,11 +554,17 @@ def test_contested_move_has_higher_uncertainty_than_unargued_move() -> None:
 
 @pytest.mark.property
 def test_hanging_piece_objections_scale_with_material_cost() -> None:
-    moved_minor = to_argument_evidence("safety:moved_piece_en_pris:330")
-    ignored_minor = to_argument_evidence("safety:ignored_hanging_piece:f2f4:b3:330")
-    moved_pawn = to_argument_evidence("safety:moved_piece_en_pris:100")
-    moved_queen = to_argument_evidence("safety:moved_piece_en_pris:900")
-    queen_flank = to_argument_evidence("king_safety:queen_flank_invasion:f7f5:g7")
+    moved_minor = synthetic_objection_evidence("safety:moved_piece_en_pris:330")
+    ignored_minor = objection_evidence(
+        "safety:ignored_hanging_piece:f2f4:b3:330",
+        world=EvidenceWorld.MATERIAL,
+        objection_kind=ObjectionKind.IGNORED_HANGING_PIECE,
+        objection_strength=17,
+        argument_value="material_safety",
+    )
+    moved_pawn = synthetic_objection_evidence("safety:moved_piece_en_pris:100")
+    moved_queen = synthetic_objection_evidence("safety:moved_piece_en_pris:900")
+    queen_flank = synthetic_objection_evidence("king_safety:queen_flank_invasion:f7f5:g7")
 
     assert moved_minor.objection_strength == 17
     assert ignored_minor.objection_strength == 17

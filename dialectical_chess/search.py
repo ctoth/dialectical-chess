@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from dialectical_chess.evidence import ArgumentEvidence, reply_evidence
+
 
 OWNED_PIECE_VALUE = {"p": 100, "n": 320, "b": 330, "r": 500, "q": 900, "k": 0}
 
@@ -245,6 +247,26 @@ def bounded_reply_attacks(
     settings: ReplyAnalysisSettings | None = None,
     cache: ReplyAnalysisCache | None = None,
 ) -> tuple[str, ...]:
+    return tuple(
+        evidence.label
+        for evidence in bounded_reply_attack_evidence(
+            board,
+            move,
+            reply_depth=reply_depth,
+            settings=settings,
+            cache=cache,
+        )
+    )
+
+
+def bounded_reply_attack_evidence(
+    board: Any,
+    move: Any,
+    *,
+    reply_depth: int,
+    settings: ReplyAnalysisSettings | None = None,
+    cache: ReplyAnalysisCache | None = None,
+) -> tuple[ArgumentEvidence, ...]:
     if reply_depth <= 0:
         return ()
     settings = settings or ReplyAnalysisSettings()
@@ -252,7 +274,7 @@ def bounded_reply_attacks(
     moved_piece = board.piece_at(move.from_square)
     moved_piece_value = OWNED_PIECE_VALUE.get(moved_piece.lower(), 0) if moved_piece else 0
     moved_to = move.to_square
-    attacks: list[str] = []
+    attacks: list[ArgumentEvidence] = []
 
     child = cache.apply(board, move)
     if cache.legal_moves(child):
@@ -293,18 +315,38 @@ def bounded_reply_attacks(
                 )
             )
             if reply_is_mate:
-                attacks.append(defended_label("reply_mate", reply_text, defended=defended))
-            if reply_captures_moved_piece:
                 attacks.append(
-                    defended_label(
-                        "reply_captures_moved_piece",
-                        f"{reply_text}:{moved_piece_value}",
-                        defended=defended,
+                    reply_evidence(
+                        defended_label("reply_mate", reply_text, defended=defended),
+                        reply_attack_strength=7,
+                        defense_strength=13 if defended else 0,
+                        forced_mate_distance=None if defended else 1,
                     )
                 )
+            if reply_captures_moved_piece:
+                attacks.append(
+                    reply_evidence(
+                        defended_label(
+                            "reply_captures_moved_piece",
+                            f"{reply_text}:{moved_piece_value}",
+                            defended=defended,
+                        ),
+                        reply_attack_strength=1,
+                        defense_strength=13 if defended else 0,
+                    )
+                )
+    labels = {evidence.label for evidence in attacks}
     for reason in sorted(cache.truncation_reasons):
-        attacks.append(f"reply_analysis:truncated:{reason}")
-    return tuple(sorted(set(attacks)))
+        label = f"reply_analysis:truncated:{reason}"
+        if label not in labels:
+            attacks.append(
+                reply_evidence(
+                    label,
+                    reply_attack_strength=1,
+                    argument_value="procedural",
+                )
+            )
+    return tuple(sorted(attacks, key=lambda evidence: evidence.label))
 
 
 def defended_label(kind: str, payload: str, *, defended: bool) -> str:

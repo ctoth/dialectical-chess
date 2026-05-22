@@ -14,8 +14,10 @@ from dialectical_chess.evidence import (
     ArgumentEvidence,
     DefeaterKind,
     ObjectionKind,
+    EvidenceWorld,
+    SupportKind,
+    defeater_evidence as make_defeater_evidence,
     is_forced_mate_refutation,
-    to_argument_evidence,
 )
 from dialectical_chess.static_prior import squash, static_prior
 from dialectical_chess.tuning import (
@@ -171,21 +173,21 @@ def objection_defeater_evidence(
         objection.objection_kind == ObjectionKind.QUEEN_BLUNDER
         and has_compensating_forcing_pressure(probe)
     ):
-        defeaters.append(defeater_evidence(DefeaterKind.COMPENSATING_FORCING_PRESSURE))
+        defeaters.append(synthetic_defeater_evidence(DefeaterKind.COMPENSATING_FORCING_PRESSURE))
     if (
         objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
         and objection.moved_piece_en_pris_value is not None
         and objection.moved_piece_en_pris_value >= 300
     ):
         if has_compensating_tactical_pressure(probe):
-            defeaters.append(defeater_evidence(DefeaterKind.COMPENSATING_TACTICAL_PRESSURE))
+            defeaters.append(synthetic_defeater_evidence(DefeaterKind.COMPENSATING_TACTICAL_PRESSURE))
         if has_forcing_material_gain(probe):
-            defeaters.append(defeater_evidence(DefeaterKind.FORCING_MATERIAL_GAIN))
+            defeaters.append(synthetic_defeater_evidence(DefeaterKind.FORCING_MATERIAL_GAIN))
     if (
         objection.objection_kind == ObjectionKind.OPENING_PREMATURE_MINOR_CHECK
         and has_typed_reason_defeater(probe, DefeaterKind.SEARCH_SUPPORT)
     ):
-        defeaters.append(defeater_evidence(DefeaterKind.SEARCH_SUPPORT))
+        defeaters.append(synthetic_defeater_evidence(DefeaterKind.SEARCH_SUPPORT))
     if (
         objection.objection_kind
         in {
@@ -194,14 +196,33 @@ def objection_defeater_evidence(
         }
         and has_typed_reason_defeater(probe, DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE)
     ):
-        defeaters.append(defeater_evidence(DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE))
+        defeaters.append(synthetic_defeater_evidence(DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE))
     if objection.defense_strength > 0:
         defeaters.append(objection)
     return tuple(defeaters)
 
 
-def defeater_evidence(defeater_kind: DefeaterKind) -> ArgumentEvidence:
-    return to_argument_evidence(f"defeater:{defeater_kind.value}")
+def synthetic_defeater_evidence(defeater_kind: DefeaterKind) -> ArgumentEvidence:
+    return make_defeater_evidence(
+        f"defeater:{defeater_kind.value}",
+        world=EvidenceWorld.PROCEDURAL,
+        defeater_kind=defeater_kind,
+        defeater_strength=defeater_strength_for(defeater_kind),
+    )
+
+
+def defeater_strength_for(defeater_kind: DefeaterKind) -> int:
+    match defeater_kind:
+        case DefeaterKind.SEARCH_SUPPORT:
+            return 97
+        case (
+            DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE
+            | DefeaterKind.COMPENSATING_FORCING_PRESSURE
+            | DefeaterKind.FORCING_MATERIAL_GAIN
+        ):
+            return 33
+        case DefeaterKind.COMPENSATING_TACTICAL_PRESSURE:
+            return 17
 
 
 def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
@@ -260,7 +281,7 @@ def has_search_refutation_at_most(probe: MoveProbe, threshold: int) -> bool:
 
 
 def has_development_reason(probe: MoveProbe) -> bool:
-    return any(evidence.label.startswith("development:") for evidence in probe.reason_evidence)
+    return any(evidence.support_kind == SupportKind.DEVELOPMENT for evidence in probe.reason_evidence)
 
 
 def move_argument_id(uci: str) -> str:

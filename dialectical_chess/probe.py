@@ -10,12 +10,27 @@ import chess
 
 from dialectical_chess.arguments import MoveProbe
 from dialectical_chess.board import OwnedBoard, file_of, opposite, piece_color, rank_of, square_index, square_name
+from dialectical_chess.evidence import (
+    ArgumentEvidence,
+    DefeaterKind,
+    EvidenceWorld,
+    ObjectionKind,
+    SupportKind,
+    base_objection_strength,
+    defeater_evidence,
+    defeater_strength,
+    material_cost_objection_strength,
+    objection_evidence,
+    reply_evidence,
+    support_evidence,
+)
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.search import (
     OWNED_PIECE_VALUE,
     ReplyAnalysisCache,
     ReplyAnalysisSettings,
     SearchSettings,
+    bounded_reply_attack_evidence,
     bounded_reply_attacks,
     owned_capture_value,
     owned_is_capture,
@@ -44,6 +59,93 @@ class ProbeSettings:
     reply_mate_scan: bool = True
     position_history: tuple[str, ...] = ()
     deadline: float | None = None
+
+
+@dataclass(frozen=True)
+class EvidenceLabels:
+    labels: tuple[str, ...]
+    evidence: tuple[ArgumentEvidence, ...] = ()
+    score: int = 0
+
+
+def support(
+    label: str,
+    *,
+    world: EvidenceWorld,
+    strength: int,
+    counts_as_positional: bool = False,
+    counts_as_tactical: bool = False,
+    argument_value: str = "procedural",
+    tactical_threat_value: int = 0,
+    defended_piece_value: int | None = None,
+    search_support_score: int | None = None,
+    support_kind: SupportKind = SupportKind.GENERIC,
+) -> ArgumentEvidence:
+    return support_evidence(
+        label,
+        world=world,
+        counts_as_positional=counts_as_positional,
+        counts_as_tactical=counts_as_tactical,
+        argument_value=argument_value,
+        support_strength=strength,
+        tactical_threat_value=tactical_threat_value,
+        defended_piece_value=defended_piece_value,
+        search_support_score=search_support_score,
+        support_kind=support_kind,
+    )
+
+
+def display_evidence(label: str, *, world: EvidenceWorld = EvidenceWorld.PROCEDURAL) -> ArgumentEvidence:
+    return support_evidence(label, world=world)
+
+
+def objection(
+    label: str,
+    *,
+    kind: ObjectionKind,
+    strength: int | None = None,
+    world: EvidenceWorld = EvidenceWorld.UNKNOWN,
+    moved_piece_en_pris_value: int | None = None,
+    search_refutation_score: int | None = None,
+    forced_mate_distance: int | None = None,
+    argument_value: str = "procedural",
+) -> ArgumentEvidence:
+    return objection_evidence(
+        label,
+        world=world,
+        objection_kind=kind,
+        objection_strength=base_objection_strength(kind) if strength is None else strength,
+        moved_piece_en_pris_value=moved_piece_en_pris_value,
+        search_refutation_score=search_refutation_score,
+        forced_mate_distance=forced_mate_distance,
+        argument_value=argument_value,
+    )
+
+
+def search_refutation_strength(score: int) -> int:
+    if score <= -100_000:
+        return 6
+    if score <= -500:
+        return 1
+    return 0
+
+
+def material_support_strength(value: int) -> int:
+    if value >= 500:
+        return 9
+    if value >= 300:
+        return 6
+    if value > 0:
+        return 3
+    return 1
+
+
+def defended_piece_support_strength(value: int) -> int:
+    if value >= 900:
+        return 4
+    if value >= 500:
+        return 3
+    return 1
 
 
 def probe_moves(
@@ -107,24 +209,68 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
 
         reasons: list[str] = []
         objections: list[str] = []
+        reason_evidence: list[ArgumentEvidence] = []
+        objection_evidence_items: list[ArgumentEvidence] = []
         score = 0
 
         if is_checkmate:
             score += 1_000_000
-            reasons.append("terminal:checkmate")
+            label = "terminal:checkmate"
+            reasons.append(label)
+            reason_evidence.append(
+                support(
+                    label,
+                    world=EvidenceWorld.TERMINAL,
+                    counts_as_tactical=True,
+                    argument_value="terminal",
+                    strength=9,
+                )
+            )
         elif is_draw:
-            objections.extend(draw_objections(move, child=child, position_history=child_position_history))
+            draw = draw_objections(move, child=child, position_history=child_position_history)
+            objections.extend(draw.labels)
+            objection_evidence_items.extend(draw.evidence)
         if not is_draw and gives_check:
             score += 1_000
-            reasons.append("tactical:check")
+            label = "tactical:check"
+            reasons.append(label)
+            reason_evidence.append(
+                support(
+                    label,
+                    world=EvidenceWorld.TACTICAL,
+                    counts_as_tactical=True,
+                    argument_value="tactical",
+                    strength=7,
+                )
+            )
         if not is_draw and is_capture:
             score += captured_value
-            reasons.append(f"material:capture:{captured_value}")
+            label = f"material:capture:{captured_value}"
+            reasons.append(label)
+            reason_evidence.append(
+                support(
+                    label,
+                    world=EvidenceWorld.MATERIAL,
+                    counts_as_tactical=True,
+                    argument_value="tactical",
+                    strength=material_support_strength(captured_value),
+                )
+            )
         if not is_draw and promotion_value:
             score += promotion_value
-            reasons.append(f"material:promotion:{promotion_value}")
+            label = f"material:promotion:{promotion_value}"
+            reasons.append(label)
+            reason_evidence.append(
+                support(
+                    label,
+                    world=EvidenceWorld.MATERIAL,
+                    counts_as_tactical=True,
+                    argument_value="tactical",
+                    strength=17,
+                )
+            )
         if not is_draw and not is_checkmate:
-            safety_reasons, safety_objections, safety_score = moved_piece_safety_labels(
+            safety_reasons, safety_reason_evidence, safety_objections, safety_objection_evidence, safety_score = moved_piece_safety_labels(
                 board,
                 move,
                 child,
@@ -133,81 +279,106 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 promotion_value=promotion_value,
             )
             reasons.extend(safety_reasons)
+            reason_evidence.extend(safety_reason_evidence)
             objections.extend(safety_objections)
+            objection_evidence_items.extend(safety_objection_evidence)
             score += safety_score
-            threat_reasons, threat_score = moved_piece_threat_labels(board, move, child)
-            reasons.extend(threat_reasons)
-            score += threat_score
-            opening_objections, opening_score = opening_development_objections(
+            threat = moved_piece_threat_labels(board, move, child)
+            reasons.extend(threat.labels)
+            reason_evidence.extend(threat.evidence)
+            score += threat.score
+            opening = opening_development_objections(
                 board,
                 move,
                 captured_value=captured_value,
                 gives_check=gives_check,
             )
-            objections.extend(opening_objections)
-            score += opening_score
-            minor_retreat_objections, minor_retreat_score = opening_minor_retreat_objections(
+            objections.extend(opening.labels)
+            objection_evidence_items.extend(opening.evidence)
+            score += opening.score
+            minor_retreat = opening_minor_retreat_objections(
                 board,
                 move,
                 captured_value=captured_value,
                 gives_check=gives_check,
             )
-            objections.extend(minor_retreat_objections)
-            score += minor_retreat_score
-            king_objections, king_score = opening_king_safety_objections(
+            objections.extend(minor_retreat.labels)
+            objection_evidence_items.extend(minor_retreat.evidence)
+            score += minor_retreat.score
+            king = opening_king_safety_objections(
                 board,
                 move,
                 captured_value=captured_value,
             )
-            objections.extend(king_objections)
-            score += king_score
-            flank_pawn_objections, flank_pawn_score = flank_pawn_weakening_objections(board, move)
-            objections.extend(flank_pawn_objections)
-            score += flank_pawn_score
-            flank_response_reasons, flank_unanswered_objections, flank_response_score = advanced_flank_pawn_response_labels(
+            objections.extend(king.labels)
+            objection_evidence_items.extend(king.evidence)
+            score += king.score
+            flank_pawn = flank_pawn_weakening_objections(board, move)
+            objections.extend(flank_pawn.labels)
+            objection_evidence_items.extend(flank_pawn.evidence)
+            score += flank_pawn.score
+            flank_response_reasons, flank_response_evidence, flank_unanswered_objections, flank_unanswered_evidence, flank_response_score = advanced_flank_pawn_response_labels(
                 board,
                 move,
                 child,
             )
             reasons.extend(flank_response_reasons)
+            reason_evidence.extend(flank_response_evidence)
             objections.extend(flank_unanswered_objections)
+            objection_evidence_items.extend(flank_unanswered_evidence)
             score += flank_response_score
-            ignored_objections, ignored_score = ignored_hanging_piece_objections(board, move, child)
-            objections.extend(ignored_objections)
-            score += ignored_score
-            flank_objections, flank_score = queen_flank_invasion_objections(board, move, child)
-            objections.extend(flank_objections)
-            score += flank_score
+            ignored = ignored_hanging_piece_objections(board, move, child)
+            objections.extend(ignored.labels)
+            objection_evidence_items.extend(ignored.evidence)
+            score += ignored.score
+            flank = queen_flank_invasion_objections(board, move, child)
+            objections.extend(flank.labels)
+            objection_evidence_items.extend(flank.evidence)
+            score += flank.score
             if settings.positional_reasons:
-                escape_reasons, escape_score = king_escape_square_reasons(board, move, child)
-                reasons.extend(escape_reasons)
-                score += escape_score
+                escape = king_escape_square_reasons(board, move, child)
+                reasons.extend(escape.labels)
+                reason_evidence.extend(escape.evidence)
+                score += escape.score
             if settings.reply_mate_scan and should_scan_reply_mate(
                 settings.search.depth,
                 board,
                 move,
                 captured_value=captured_value,
-                reasons=reasons,
-                objections=objections,
+                reason_evidence=reason_evidence,
+                objection_evidence=objection_evidence_items,
             ):
-                reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
-                objections.extend(reply_mate_objections)
-                score += reply_mate_score
+                reply_mate = reply_mate_in_one_objections(child, move)
+                objections.extend(reply_mate.labels)
+                objection_evidence_items.extend(reply_mate.evidence)
+                score += reply_mate.score
         if not is_draw and settings.positional_reasons:
             positional = positional_reason_labels(board, move, child)
-            if positional:
-                score += 25 * len(positional)
-                reasons.extend(positional)
+            if positional.labels:
+                score += 25 * len(positional.labels)
+                reasons.extend(positional.labels)
+                reason_evidence.extend(positional.evidence)
         smt_witnesses: list[str] = []
         if not is_draw and move.uci() in smt_mate_moves:
             score += 1_000_000
-            reasons.append("procedural:mate_in_one")
+            label = "procedural:mate_in_one"
+            reasons.append(label)
+            reason_evidence.append(
+                support(
+                    label,
+                    world=EvidenceWorld.PROCEDURAL,
+                    counts_as_tactical=True,
+                    strength=9,
+                )
+            )
             smt_witnesses.append("procedural_mate_in_one")
         if not is_draw and move.uci() in smt_fork_move_set:
-            fork_reasons, fork_objections, fork_score = fork_witness_labels(smt_fork_witness_map[move.uci()], gives_check)
+            fork_reasons, fork_reason_evidence, fork_objections, fork_objection_evidence, fork_score = fork_witness_labels(smt_fork_witness_map[move.uci()], gives_check)
             score += fork_score
             reasons.extend(fork_reasons)
+            reason_evidence.extend(fork_reason_evidence)
             objections.extend(fork_objections)
+            objection_evidence_items.extend(fork_objection_evidence)
             smt_witnesses.append("fork")
         search_result = None if is_draw else root_search_result(
             board,
@@ -218,42 +389,92 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         if search_result is not None:
             search_line_label = "search_line:" + "-".join(search_result.line)
             if search_result.score > 0:
-                reasons.append(f"search:{settings.search.backend}:{search_result.score}")
-                reasons.append(f"search_support:{settings.search.backend}:{search_result.score}")
+                search_label = f"search:{settings.search.backend}:{search_result.score}"
+                support_label = f"search_support:{settings.search.backend}:{search_result.score}"
+                reasons.append(search_label)
+                reasons.append(support_label)
                 reasons.append(search_line_label)
+                reason_evidence.append(
+                    support(
+                        search_label,
+                        world=EvidenceWorld.SEARCH,
+                        counts_as_tactical=True,
+                        argument_value="search",
+                        strength=4,
+                    )
+                )
+                reason_evidence.append(
+                    defeater_evidence(
+                        support_label,
+                        world=EvidenceWorld.SEARCH,
+                        defeater_kind=DefeaterKind.SEARCH_SUPPORT,
+                        defeater_strength=defeater_strength(DefeaterKind.SEARCH_SUPPORT),
+                        counts_as_tactical=True,
+                        argument_value="search",
+                        support_strength=4,
+                        search_support_score=search_result.score,
+                    )
+                )
+                reason_evidence.append(display_evidence(search_line_label, world=EvidenceWorld.SEARCH))
             elif search_result.score < 0:
-                objections.append(f"search:{settings.search.backend}:{search_result.score}")
-                objections.append(f"search_refutes:{settings.search.backend}:{search_result.score}")
+                search_label = f"search:{settings.search.backend}:{search_result.score}"
+                refutes_label = f"search_refutes:{settings.search.backend}:{search_result.score}"
+                objections.append(search_label)
+                objections.append(refutes_label)
                 objections.append(search_line_label)
+                objection_evidence_items.append(display_evidence(search_label, world=EvidenceWorld.SEARCH))
+                objection_evidence_items.append(
+                    objection(
+                        refutes_label,
+                        kind=ObjectionKind.SEARCH_REFUTATION,
+                        strength=search_refutation_strength(search_result.score),
+                        world=EvidenceWorld.SEARCH,
+                        search_refutation_score=search_result.score,
+                        argument_value="search",
+                    )
+                )
+                objection_evidence_items.append(display_evidence(search_line_label, world=EvidenceWorld.SEARCH))
             score += search_result.score
             if (
                 settings.search.depth == 1
                 and search_result.score <= -700
                 and settings.reply_mate_scan
-                and not has_reply_mate_in_one_objection(objections)
+                and not has_reply_mate_in_one_objection(objection_evidence_items)
             ):
-                reply_mate_objections, reply_mate_score = reply_mate_in_one_objections(child, move)
-                objections.extend(reply_mate_objections)
-                score += reply_mate_score
+                reply_mate = reply_mate_in_one_objections(child, move)
+                objections.extend(reply_mate.labels)
+                objection_evidence_items.extend(reply_mate.evidence)
+                score += reply_mate.score
         if not is_draw:
-            drift_objections, drift_score = unsupported_major_drift_objections(
+            drift = unsupported_major_drift_objections(
                 board,
                 move,
                 captured_value=captured_value,
                 gives_check=gives_check,
-                reasons=reasons,
+                reason_evidence=reason_evidence,
             )
-            objections.extend(drift_objections)
-            score += drift_score
-        reply_attacks = () if is_draw else bounded_reply_attacks(
+            objections.extend(drift.labels)
+            objection_evidence_items.extend(drift.evidence)
+            score += drift.score
+        reply_attack_evidence = () if is_draw else bounded_reply_attack_evidence(
             board,
             move,
             reply_depth=settings.dialectic_depth,
             settings=settings.reply_analysis,
             cache=reply_cache,
         )
+        reply_attacks = tuple(evidence.label for evidence in reply_attack_evidence)
         if not reasons:
-            objections.append("objection:no_immediate_tactical_warrant")
+            label = "objection:no_immediate_tactical_warrant"
+            objections.append(label)
+            objection_evidence_items.append(
+                objection(
+                    label,
+                    kind=ObjectionKind.NO_IMMEDIATE_TACTICAL_WARRANT,
+                    strength=0,
+                    world=EvidenceWorld.PROCEDURAL,
+                )
+            )
 
         probes.append(
             MoveProbe(
@@ -272,6 +493,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 search_line=() if search_result is None else search_result.line,
                 smt_witnesses=tuple(smt_witnesses),
                 post_fen=child.fen(),
+                reason_evidence=tuple(reason_evidence),
+                objection_evidence=tuple(objection_evidence_items),
+                reply_attack_evidence=reply_attack_evidence,
             )
         )
     if settings.reply_mate_scan:
@@ -286,9 +510,9 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
     return sorted(probes, key=lambda probe: (-probe.score, probe.uci))
 
 
-def has_reply_mate_in_one_objection(objections: list[str]) -> bool:
+def has_reply_mate_in_one_objection(objections: list[ArgumentEvidence]) -> bool:
     return any(
-        objection.startswith("tactical:allows_reply_mate_in_one:")
+        objection.objection_kind == ObjectionKind.REPLY_MATE_IN_ONE
         for objection in objections
     )
 
@@ -299,16 +523,27 @@ def unsupported_major_drift_objections(
     *,
     captured_value: int,
     gives_check: bool,
-    reasons: list[str],
-) -> tuple[tuple[str, ...], int]:
+    reason_evidence: list[ArgumentEvidence],
+) -> EvidenceLabels:
     piece = board.piece_at(move.from_square)
     if piece is None or piece.lower() != "q":
-        return (), 0
+        return EvidenceLabels(())
     if board.fullmove_number > 35 or captured_value > 0 or gives_check:
-        return (), 0
-    if any(is_direct_tactical_warrant(reason) for reason in reasons):
-        return (), 0
-    return ((f"strategy:unsupported_major_drift:{move.uci()}",), -300)
+        return EvidenceLabels(())
+    if any(reason.supports_argument and reason.counts_as_tactical for reason in reason_evidence):
+        return EvidenceLabels(())
+    label = f"strategy:unsupported_major_drift:{move.uci()}"
+    return EvidenceLabels(
+        (label,),
+        (
+            objection(
+                label,
+                kind=ObjectionKind.UNSUPPORTED_MAJOR_DRIFT,
+                strength=1,
+            ),
+        ),
+        -300,
+    )
 
 
 def draw_objections(
@@ -316,46 +551,51 @@ def draw_objections(
     *,
     child: OwnedBoard,
     position_history: tuple[str, ...],
-) -> tuple[str, ...]:
-    objections = []
+) -> EvidenceLabels:
+    labels: list[str] = []
+    evidence: list[ArgumentEvidence] = []
     move_text = move.uci()
     if owned_is_threefold_repetition(child, position_history=position_history):
-        objections.append(f"strategy:threefold_repetition:{move_text}")
+        label = f"strategy:threefold_repetition:{move_text}"
+        labels.append(label)
+        evidence.append(objection(label, kind=ObjectionKind.THREEFOLD_REPETITION))
     if child.is_fifty_move_draw():
-        objections.append(f"strategy:fifty_move_draw:{move_text}")
-    return tuple(objections)
-
-
-def is_direct_tactical_warrant(reason: str) -> bool:
-    return reason.startswith(
-        (
-            "terminal:",
-            "tactical:",
-            "material:",
-            "procedural:",
-            "smt:",
-            "search_support:",
-        )
-    )
+        label = f"strategy:fifty_move_draw:{move_text}"
+        labels.append(label)
+        evidence.append(objection(label, kind=ObjectionKind.FIFTY_MOVE_DRAW))
+    return EvidenceLabels(tuple(labels), tuple(evidence))
 
 
 def king_escape_square_reasons(
     board: OwnedBoard,
     move: Any,
     child: OwnedBoard,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     piece = board.piece_at(move.from_square)
     if piece is None or piece.lower() != "p":
-        return (), 0
+        return EvidenceLabels(())
     color = piece_color(piece)
     king_square = board.king_square(color)
     if not king_adjacent(king_square, move.from_square):
-        return (), 0
+        return EvidenceLabels(())
     if child.piece_at(move.from_square) is not None:
-        return (), 0
+        return EvidenceLabels(())
     if child.is_square_attacked(move.from_square, opposite(color)):
-        return (), 0
-    return ((f"king_safety:escape_square:{move.uci()}:{square_name(move.from_square)}",), 300)
+        return EvidenceLabels(())
+    label = f"king_safety:escape_square:{move.uci()}:{square_name(move.from_square)}"
+    return EvidenceLabels(
+        (label,),
+        (
+            support(
+                label,
+                world=EvidenceWorld.POSITIONAL,
+                counts_as_positional=True,
+                argument_value="positional",
+                strength=1,
+            ),
+        ),
+        300,
+    )
 
 
 def king_adjacent(left: int, right: int) -> bool:
@@ -365,7 +605,10 @@ def king_adjacent(left: int, right: int) -> bool:
     ) == 1
 
 
-def fork_witness_labels(witness: Any, gives_check: bool) -> tuple[tuple[str, ...], tuple[str, ...], int]:
+def fork_witness_labels(
+    witness: Any,
+    gives_check: bool,
+) -> tuple[tuple[str, ...], tuple[ArgumentEvidence, ...], tuple[str, ...], tuple[ArgumentEvidence, ...], int]:
     labels = [
         f"smt:fork:targets:{witness.target_count}:value:{witness.target_value}",
         f"smt:fork:piece:{witness.piece}",
@@ -373,15 +616,47 @@ def fork_witness_labels(witness: Any, gives_check: bool) -> tuple[tuple[str, ...
     ]
     if gives_check:
         labels.append("smt:fork:gives_check")
+    reason_evidence = [display_evidence(label, world=EvidenceWorld.SMT) for label in labels]
     if witness.piece in {"q", "r"} and not gives_check:
-        objections = (f"smt:fork:high_value_piece:{witness.piece}",)
-        return tuple(labels), objections, 0
+        objection_label = f"smt:fork:high_value_piece:{witness.piece}"
+        return (
+            tuple(labels),
+            tuple(reason_evidence),
+            (objection_label,),
+            (
+                objection(
+                    objection_label,
+                    kind=ObjectionKind.SMT_FORK_HIGH_VALUE,
+                    strength=3,
+                    world=EvidenceWorld.SMT,
+                    argument_value="tactical",
+                ),
+            ),
+            0,
+        )
     if witness.moved_piece_en_pris_value:
-        objections = (f"smt:fork:moved_piece_en_pris:{witness.moved_piece_en_pris_value}",)
+        objection_label = f"smt:fork:moved_piece_en_pris:{witness.moved_piece_en_pris_value}"
+        objections = (objection_label,)
+        objection_evidence = (display_evidence(objection_label, world=EvidenceWorld.SMT),)
         if witness.net_value <= 0 and not gives_check:
-            return tuple(labels), objections, 0
+            return tuple(labels), tuple(reason_evidence), objections, objection_evidence, 0
     compatibility = f"smt:fork:{witness.target_count}:{witness.target_value}"
-    return (compatibility, *labels), (), max(0, witness.net_value)
+    return (
+        (compatibility, *labels),
+        (
+            support(
+                compatibility,
+                world=EvidenceWorld.SMT,
+                counts_as_tactical=True,
+                argument_value="tactical",
+                strength=4,
+            ),
+            *reason_evidence,
+        ),
+        (),
+        (),
+        max(0, witness.net_value),
+    )
 
 
 def moved_piece_safety_labels(
@@ -392,44 +667,90 @@ def moved_piece_safety_labels(
     captured_value: int,
     gives_check: bool,
     promotion_value: int,
-) -> tuple[tuple[str, ...], tuple[str, ...], int]:
+) -> tuple[tuple[str, ...], tuple[ArgumentEvidence, ...], tuple[str, ...], tuple[ArgumentEvidence, ...], int]:
     moved_piece = board.piece_at(move.from_square)
     if moved_piece is None:
-        return (), (), 0
+        return (), (), (), (), 0
     moved_value = OWNED_PIECE_VALUE.get((move.promotion or moved_piece).lower(), 0)
     if moved_value <= 0:
-        return (), (), 0
+        return (), (), (), (), 0
     defended = child.is_square_attacked(move.to_square, opposite(child.turn))
     en_pris = child.is_square_attacked(move.to_square, child.turn)
     reasons: list[str] = []
     objections: list[str] = []
+    reason_evidence: list[ArgumentEvidence] = []
+    objection_evidence_items: list[ArgumentEvidence] = []
     score = 0
     if defended:
-        reasons.append(f"piece_safety:defended:{move.uci()}:{moved_value}")
+        label = f"piece_safety:defended:{move.uci()}:{moved_value}"
+        reasons.append(label)
+        reason_evidence.append(
+            support(
+                label,
+                world=EvidenceWorld.POSITIONAL,
+                counts_as_positional=True,
+                argument_value="positional",
+                strength=defended_piece_support_strength(moved_value),
+                defended_piece_value=moved_value,
+            )
+        )
         score += 15
     if en_pris:
         exchange_gain = captured_value + promotion_value - moved_value
         if gives_check and exchange_gain >= -100:
-            reasons.append(f"tactical:checking_exchange_pressure:{move.uci()}:{exchange_gain}")
+            label = f"tactical:checking_exchange_pressure:{move.uci()}:{exchange_gain}"
+            reasons.append(label)
+            reason_evidence.append(
+                support(
+                    label,
+                    world=EvidenceWorld.TACTICAL,
+                    counts_as_tactical=True,
+                    argument_value="tactical",
+                    strength=3,
+                )
+            )
         elif exchange_gain < 0:
-            objections.append(f"safety:moved_piece_en_pris:{moved_value}")
+            label = f"safety:moved_piece_en_pris:{moved_value}"
+            objections.append(label)
+            objection_evidence_items.append(
+                objection(
+                    label,
+                    kind=ObjectionKind.MOVED_PIECE_EN_PRIS,
+                    strength=material_cost_objection_strength(moved_value),
+                    world=EvidenceWorld.MATERIAL,
+                    moved_piece_en_pris_value=moved_value,
+                    argument_value="material_safety",
+                )
+            )
             score += exchange_gain
             if moved_value >= OWNED_PIECE_VALUE["q"] and exchange_gain <= -300:
-                objections.append(f"safety:queen_blunder:{move.uci()}:{-exchange_gain}")
+                label = f"safety:queen_blunder:{move.uci()}:{-exchange_gain}"
+                objections.append(label)
+                objection_evidence_items.append(
+                    objection(
+                        label,
+                        kind=ObjectionKind.QUEEN_BLUNDER,
+                        strength=2,
+                        world=EvidenceWorld.MATERIAL,
+                        argument_value="material_safety",
+                    )
+                )
                 score -= moved_value
         else:
-            reasons.append(f"material:exchange_nonnegative:{exchange_gain}")
-    return tuple(reasons), tuple(objections), score
+            label = f"material:exchange_nonnegative:{exchange_gain}"
+            reasons.append(label)
+            reason_evidence.append(display_evidence(label, world=EvidenceWorld.MATERIAL))
+    return tuple(reasons), tuple(reason_evidence), tuple(objections), tuple(objection_evidence_items), score
 
 
 def moved_piece_threat_labels(
     board: OwnedBoard,
     move: Any,
     child: OwnedBoard,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     moved_piece = board.piece_at(move.from_square)
     if moved_piece is None:
-        return (), 0
+        return EvidenceLabels(())
     targets = []
     for square, piece in enumerate(child.squares):
         if piece is None or piece_color(piece) != child.turn:
@@ -439,10 +760,19 @@ def moved_piece_threat_labels(
             targets.append(value)
     target_value = sum(targets)
     if target_value < 500:
-        return (), 0
-    return (
+        return EvidenceLabels(())
+    label = f"tactical:threat:targets:{len(targets)}:value:{target_value}"
+    return EvidenceLabels(
+        (label,),
         (
-            f"tactical:threat:targets:{len(targets)}:value:{target_value}",
+            support(
+                label,
+                world=EvidenceWorld.TACTICAL,
+                counts_as_tactical=True,
+                argument_value="tactical",
+                strength=6 if target_value >= 700 else 3,
+                tactical_threat_value=target_value,
+            ),
         ),
         min(target_value, 700),
     )
@@ -454,10 +784,10 @@ def opening_development_objections(
     *,
     captured_value: int,
     gives_check: bool,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     piece = board.piece_at(move.from_square)
     if piece is None:
-        return (), 0
+        return EvidenceLabels(())
     color = piece_color(piece)
     kind = piece.lower()
     undeveloped_minors = undeveloped_minor_count(board, color)
@@ -468,23 +798,49 @@ def opening_development_objections(
         and board.fullmove_number <= 10
         and undeveloped_minors >= 2
     ):
+        label = f"opening:premature_minor_check:{move.uci()}:undeveloped_minors:{undeveloped_minors}"
         return (
-            (f"opening:premature_minor_check:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
-            -900,
+            EvidenceLabels(
+                (label,),
+                (
+                    objection(
+                        label,
+                        kind=ObjectionKind.OPENING_PREMATURE_MINOR_CHECK,
+                        strength=1,
+                    ),
+                ),
+                -900,
+            )
         )
     if kind not in {"q", "r"}:
-        return (), 0
+        return EvidenceLabels(())
     if captured_value >= OWNED_PIECE_VALUE["n"]:
-        return (), 0
+        return EvidenceLabels(())
     if kind == "r" and captured_value == 0 and board.fullmove_number <= 20:
-        return (
-            (f"opening:premature_rook:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
+        label = f"opening:premature_rook:{move.uci()}:undeveloped_minors:{undeveloped_minors}"
+        return EvidenceLabels(
+            (label,),
+            (
+                objection(
+                    label,
+                    kind=ObjectionKind.OPENING_PREMATURE_ROOK,
+                    strength=1,
+                ),
+            ),
             -250,
         )
     if kind != "q" or board.fullmove_number > 10 or undeveloped_minors < 2:
-        return (), 0
-    return (
-        (f"opening:premature_queen:{move.uci()}:undeveloped_minors:{undeveloped_minors}",),
+        return EvidenceLabels(())
+    label = f"opening:premature_queen:{move.uci()}:undeveloped_minors:{undeveloped_minors}"
+    return EvidenceLabels(
+        (label,),
+        (
+            objection(
+                label,
+                kind=ObjectionKind.OPENING_PREMATURE_QUEEN,
+                strength=1,
+            ),
+        ),
         -1_200,
     )
 
@@ -509,20 +865,31 @@ def opening_minor_retreat_objections(
     *,
     captured_value: int,
     gives_check: bool,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     piece = board.piece_at(move.from_square)
     if piece is None or piece.lower() not in {"n", "b"}:
-        return (), 0
+        return EvidenceLabels(())
     if board.fullmove_number > 20 or captured_value > 0 or gives_check:
-        return (), 0
+        return EvidenceLabels(())
     color = piece_color(piece)
     if is_minor_home_square(move.from_square, piece):
-        return (), 0
+        return EvidenceLabels(())
     to_rank = rank_of(move.to_square)
     retreats_to_home_ranks = to_rank <= 1 if color == "w" else to_rank >= 6
     if not retreats_to_home_ranks:
-        return (), 0
-    return ((f"opening:minor_retreat:{move.uci()}",), -400)
+        return EvidenceLabels(())
+    label = f"opening:minor_retreat:{move.uci()}"
+    return EvidenceLabels(
+        (label,),
+        (
+            objection(
+                label,
+                kind=ObjectionKind.OPENING_MINOR_RETREAT,
+                strength=1,
+            ),
+        ),
+        -400,
+    )
 
 
 def is_minor_home_square(square: int, piece: str) -> bool:
@@ -542,18 +909,40 @@ def opening_king_safety_objections(
     move: Any,
     *,
     captured_value: int = 0,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     piece = board.piece_at(move.from_square)
     if piece is None or piece.lower() != "k":
-        return (), 0
+        return EvidenceLabels(())
     if move.kind == "castle" or board.fullmove_number > 20:
-        return (), 0
+        return EvidenceLabels(())
     color = piece_color(piece)
     if board.in_check(color):
         if captured_value == 0 and not king_stays_on_home_rank(color, move.to_square):
-            return ((f"opening:king_center_flight:{move.uci()}",), -400)
-        return (), 0
-    return ((f"opening:king_walk:{move.uci()}",), -400)
+            label = f"opening:king_center_flight:{move.uci()}"
+            return EvidenceLabels(
+                (label,),
+                (
+                    objection(
+                        label,
+                        kind=ObjectionKind.OPENING_KING_CENTER_FLIGHT,
+                        strength=1,
+                    ),
+                ),
+                -400,
+            )
+        return EvidenceLabels(())
+    label = f"opening:king_walk:{move.uci()}"
+    return EvidenceLabels(
+        (label,),
+        (
+            objection(
+                label,
+                kind=ObjectionKind.OPENING_KING_WALK,
+                strength=1,
+            ),
+        ),
+        -400,
+    )
 
 
 def king_stays_on_home_rank(color: str, square: int) -> bool:
@@ -563,46 +952,85 @@ def king_stays_on_home_rank(color: str, square: int) -> bool:
 def flank_pawn_weakening_objections(
     board: OwnedBoard,
     move: Any,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     piece = board.piece_at(move.from_square)
     if piece is None or piece.lower() != "p" or board.fullmove_number > 20:
-        return (), 0
+        return EvidenceLabels(())
     color = piece_color(piece)
     king_square = board.king_square(color)
     from_file = file_of(move.from_square)
     labels: list[str] = []
+    evidence: list[ArgumentEvidence] = []
     score = 0
     if king_square in {square_index("g1"), square_index("g8")} and from_file in {6, 7}:
-        labels.append(f"king_safety:castled_flank_pawn_weakening:{move.uci()}")
+        label = f"king_safety:castled_flank_pawn_weakening:{move.uci()}"
+        labels.append(label)
+        evidence.append(objection(label, kind=ObjectionKind.CASTLED_FLANK_PAWN_WEAKENING, strength=1))
         score -= 900
     elif king_square in {square_index("c1"), square_index("c8")} and from_file in {0, 1, 2}:
-        labels.append(f"king_safety:castled_flank_pawn_weakening:{move.uci()}")
+        label = f"king_safety:castled_flank_pawn_weakening:{move.uci()}"
+        labels.append(label)
+        evidence.append(objection(label, kind=ObjectionKind.CASTLED_FLANK_PAWN_WEAKENING, strength=1))
         score -= 900
     elif from_file in {6, 7}:
-        labels.append(f"king_safety:flank_pawn_weakening:{move.uci()}")
+        label = f"king_safety:flank_pawn_weakening:{move.uci()}"
+        labels.append(label)
+        evidence.append(objection(label, kind=ObjectionKind.FLANK_PAWN_WEAKENING, strength=1))
         score -= 900
     if labels and abs(rank_of(move.to_square) - rank_of(move.from_square)) == 2:
-        labels.append(f"king_safety:flank_pawn_lunge:{move.uci()}")
+        label = f"king_safety:flank_pawn_lunge:{move.uci()}"
+        labels.append(label)
+        evidence.append(objection(label, kind=ObjectionKind.FLANK_PAWN_LUNGE, strength=1))
         score -= 400
-    return tuple(labels), score
+    return EvidenceLabels(tuple(labels), tuple(evidence), score)
 
 
 def advanced_flank_pawn_response_labels(
     board: OwnedBoard,
     move: Any,
     child: OwnedBoard,
-) -> tuple[tuple[str, ...], tuple[str, ...], int]:
+) -> tuple[tuple[str, ...], tuple[ArgumentEvidence, ...], tuple[str, ...], tuple[ArgumentEvidence, ...], int]:
     threats = advanced_flank_pawn_threats(board, board.turn)
     if not threats:
-        return (), (), 0
+        return (), (), (), (), 0
     child_threats = advanced_flank_pawn_threats(child, board.turn)
     if len(child_threats) < len(threats):
-        return (f"king_safety:advanced_flank_pawn_response:{move.uci()}",), (), 1_200
+        label = f"king_safety:advanced_flank_pawn_response:{move.uci()}"
+        return (
+            (label,),
+            (
+                defeater_evidence(
+                    label,
+                    world=EvidenceWorld.POSITIONAL,
+                    defeater_kind=DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE,
+                    defeater_strength=defeater_strength(DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE),
+                    counts_as_positional=True,
+                    argument_value="positional",
+                    support_strength=13,
+                ),
+            ),
+            (),
+            (),
+            1_200,
+        )
     labels = tuple(
         f"king_safety:unanswered_advanced_flank_pawn:{move.uci()}:{square_name(pawn_square)}:{square_name(target_square)}"
         for pawn_square, target_square in threats
     )
-    return (), labels, -1_500 * len(labels)
+    return (
+        (),
+        (),
+        labels,
+        tuple(
+            objection(
+                label,
+                kind=ObjectionKind.UNANSWERED_ADVANCED_FLANK_PAWN,
+                strength=4,
+            )
+            for label in labels
+        ),
+        -1_500 * len(labels),
+    )
 
 
 def advanced_flank_pawn_threats(
@@ -627,10 +1055,11 @@ def ignored_hanging_piece_objections(
     board: OwnedBoard,
     move: Any,
     child: OwnedBoard,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     color = board.turn
     opponent = opposite(color)
     labels: list[str] = []
+    evidence: list[ArgumentEvidence] = []
     score = 0
     for square, piece in enumerate(board.squares):
         if piece is None or piece_color(piece) != color:
@@ -643,9 +1072,19 @@ def ignored_hanging_piece_objections(
         if move.from_square == square:
             continue
         if child.piece_at(square) == piece and lower_value_attacker_exists(child, square, opponent, value):
-            labels.append(f"safety:ignored_hanging_piece:{move.uci()}:{square_name(square)}:{value}")
+            label = f"safety:ignored_hanging_piece:{move.uci()}:{square_name(square)}:{value}"
+            labels.append(label)
+            evidence.append(
+                objection(
+                    label,
+                    kind=ObjectionKind.IGNORED_HANGING_PIECE,
+                    strength=material_cost_objection_strength(value),
+                    world=EvidenceWorld.MATERIAL,
+                    argument_value="material_safety",
+                )
+            )
             score -= value
-    return tuple(labels), score
+    return EvidenceLabels(tuple(labels), tuple(evidence), score)
 
 
 def lower_value_attacker_exists(
@@ -675,10 +1114,11 @@ def queen_flank_invasion_objections(
     board: OwnedBoard,
     move: Any,
     child: OwnedBoard,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     color = piece_color(board.piece_at(move.from_square) or ("P" if board.turn == "w" else "p"))
     vulnerable = king_flank_pawn_squares(color)
     labels: list[str] = []
+    evidence: list[ArgumentEvidence] = []
     opponent = child.turn
     for queen_square, queen in enumerate(child.squares):
         if queen is None or queen.lower() != "q" or piece_color(queen) != opponent:
@@ -690,10 +1130,24 @@ def queen_flank_invasion_objections(
                 and captured.lower() == "p"
                 and moved_piece_attacks_square(child, queen_square, target, queen)
             ):
-                labels.append(f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(target)}")
+                label = f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(target)}"
+                labels.append(label)
+                evidence.append(
+                    objection(
+                        label,
+                        kind=ObjectionKind.QUEEN_FLANK_INVASION,
+                        strength=9,
+                    )
+                )
     if not labels:
-        return (), 0
-    return tuple(sorted(set(labels))), -2_000
+        return EvidenceLabels(())
+    by_label = {item.label: item for item in evidence}
+    unique_labels = tuple(sorted(set(labels)))
+    return EvidenceLabels(
+        unique_labels,
+        tuple(by_label[label] for label in unique_labels),
+        -2_000,
+    )
 
 
 def king_flank_pawn_squares(color: str) -> frozenset[int]:
@@ -705,18 +1159,32 @@ def king_flank_pawn_squares(color: str) -> frozenset[int]:
 def reply_mate_in_one_objections(
     child: OwnedBoard,
     move: Any,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     replies = []
     for reply in child.legal_moves():
         if owned_is_checkmate(child.apply(reply)):
             replies.append(reply.uci())
     if not replies:
-        return (), 0
+        return EvidenceLabels(())
     labels = tuple(
         f"tactical:allows_reply_mate_in_one:{move.uci()}:{reply}"
         for reply in sorted(replies)
     )
-    return labels, -100_000
+    return EvidenceLabels(
+        labels,
+        tuple(
+            objection(
+                label,
+                kind=ObjectionKind.REPLY_MATE_IN_ONE,
+                strength=6,
+                world=EvidenceWorld.TACTICAL,
+                forced_mate_distance=1,
+                argument_value="reply_refutation",
+            )
+            for label in labels
+        ),
+        -100_000,
+    )
 
 
 def reply_forced_mate_objections(
@@ -725,14 +1193,28 @@ def reply_forced_mate_objections(
     *,
     mate_depth: int,
     deadline: float | None = None,
-) -> tuple[tuple[str, ...], int]:
+) -> EvidenceLabels:
     if owned_is_checkmate(child):
-        return (), 0
+        return EvidenceLabels(())
     if not has_forced_mate(
         chess.Board(child.fen()), mate_depth=mate_depth, deadline=deadline
     ):
-        return (), 0
-    return (f"tactical:allows_reply_forced_mate_in_{mate_depth}:{move.uci()}",), -100_000
+        return EvidenceLabels(())
+    label = f"tactical:allows_reply_forced_mate_in_{mate_depth}:{move.uci()}"
+    return EvidenceLabels(
+        (label,),
+        (
+            objection(
+                label,
+                kind=ObjectionKind.REPLY_FORCED_MATE,
+                strength=6 if mate_depth == 2 else 3,
+                world=EvidenceWorld.TACTICAL,
+                forced_mate_distance=mate_depth,
+                argument_value="reply_refutation",
+            ),
+        ),
+        -100_000,
+    )
 
 
 def scan_forced_reply_mates_for_candidate_moves(
@@ -795,23 +1277,25 @@ def scan_forced_reply_mates_for_candidate_moves(
                 legal_move_count=legal_move_count,
             )
             child = board.apply(move)
-            forced_mate_objections: tuple[str, ...] = ()
+            forced_mate: EvidenceLabels = EvidenceLabels(())
             forced_mate_score = 0
             for mate_depth in mate_depths:
-                forced_mate_objections, forced_mate_score = reply_forced_mate_objections(
+                forced_mate = reply_forced_mate_objections(
                     child,
                     move,
                     mate_depth=mate_depth,
                     deadline=deadline,
                 )
-                if forced_mate_objections:
+                forced_mate_score = forced_mate.score
+                if forced_mate.labels:
                     break
-            if not forced_mate_objections:
+            if not forced_mate.labels:
                 continue
             updated[probe.uci] = replace(
                 probe,
                 score=probe.score + forced_mate_score,
-                objections=probe.objections + forced_mate_objections,
+                objections=probe.objections + forced_mate.labels,
+                objection_evidence=probe.objection_evidence + forced_mate.evidence,
             )
         if not made_progress:
             break
@@ -846,8 +1330,8 @@ def forced_reply_mate_scan_candidates(
             search_depth,
             board,
             move_by_uci[probe.uci],
-            reasons=list(probe.reasons),
-            objections=list(probe.objections),
+            reason_evidence=list(probe.reason_evidence),
+            objection_evidence=list(probe.objection_evidence),
             legal_move_count=legal_move_count,
         )
     ]
@@ -861,10 +1345,10 @@ def forced_reply_mate_scan_candidates(
     for probe in sorted(
         eligible,
         key=lambda candidate: (
-            forced_reply_mate_risk_sort_key(candidate.objections)
+            forced_reply_mate_risk_sort_key(candidate.objection_evidence)
             if search_depth == 0
             else 1,
-            search_refutation_sort_key(candidate.objections),
+            search_refutation_sort_key(candidate.objection_evidence),
             -candidate.score,
             candidate.uci,
         ),
@@ -875,12 +1359,19 @@ def forced_reply_mate_scan_candidates(
     return list(selected.values())
 
 
-def forced_reply_mate_risk_sort_key(objections: tuple[str, ...]) -> int:
+def forced_reply_mate_risk_sort_key(objections: tuple[ArgumentEvidence, ...]) -> int:
     if any(
-        objection.startswith("king_safety:")
-        or objection.startswith("opening:king_walk:")
-        or objection.startswith("opening:king_center_flight:")
-        or objection.startswith("safety:queen_blunder:")
+        objection.objection_kind
+        in {
+            ObjectionKind.FLANK_PAWN_WEAKENING,
+            ObjectionKind.CASTLED_FLANK_PAWN_WEAKENING,
+            ObjectionKind.FLANK_PAWN_LUNGE,
+            ObjectionKind.QUEEN_FLANK_INVASION,
+            ObjectionKind.UNANSWERED_ADVANCED_FLANK_PAWN,
+            ObjectionKind.OPENING_KING_WALK,
+            ObjectionKind.OPENING_KING_CENTER_FLIGHT,
+            ObjectionKind.QUEEN_BLUNDER,
+        }
         for objection in objections
     ):
         return 0
@@ -912,12 +1403,12 @@ def forced_reply_mate_depths(
         return (2, 3)
     if scan_depth_zero_positive_mate_three and probe.score > 0:
         return (2, 3)
-    if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objections):
+    if search_depth == 1 and is_deeply_refuted_major_move(board, move, probe.objection_evidence):
         return (2, 3)
     if (
         search_depth == 1
         and legal_move_count <= 20
-        and has_search_refutation_at_most(list(probe.objections), -700)
+        and has_search_refutation_at_most(list(probe.objection_evidence), -700)
     ):
         return (2, 3)
     if search_depth in {0, 1}:
@@ -928,7 +1419,7 @@ def forced_reply_mate_depths(
 def is_deeply_refuted_major_move(
     board: OwnedBoard,
     move: Any,
-    objections: tuple[str, ...],
+    objections: tuple[ArgumentEvidence, ...],
 ) -> bool:
     piece = board.piece_at(move.from_square)
     if piece is None or piece.lower() not in {"q", "r"}:
@@ -936,14 +1427,12 @@ def is_deeply_refuted_major_move(
     return has_search_refutation_at_most(list(objections), -1_500)
 
 
-def search_refutation_sort_key(objections: tuple[str, ...]) -> int:
-    scores = []
-    for objection in objections:
-        if not objection.startswith("search_refutes:"):
-            continue
-        parts = objection.split(":")
-        if len(parts) == 3:
-            scores.append(int(parts[2]))
+def search_refutation_sort_key(objections: tuple[ArgumentEvidence, ...]) -> int:
+    scores = [
+        score
+        for objection in objections
+        if (score := objection.search_refutation_score) is not None
+    ]
     return min(scores, default=0)
 
 
@@ -953,8 +1442,8 @@ def should_scan_reply_mate(
     move: Any,
     *,
     captured_value: int,
-    reasons: list[str],
-    objections: list[str],
+    reason_evidence: list[ArgumentEvidence],
+    objection_evidence: list[ArgumentEvidence],
 ) -> bool:
     if search_depth == 0:
         return True
@@ -965,17 +1454,21 @@ def should_scan_reply_mate(
         return True
     if captured_value >= OWNED_PIECE_VALUE["n"]:
         return True
-    if piece is not None and piece.lower() in {"q", "r"} and any(
-        reason.startswith("tactical:threat:")
-        for reason in reasons
-    ):
+    if piece is not None and piece.lower() in {"q", "r"} and has_tactical_threat_reason(reason_evidence):
         return True
     return any(
-        objection.startswith("king_safety:")
-        or objection.startswith("opening:king_walk:")
-        or objection.startswith("opening:king_center_flight:")
-        or objection.startswith("opening:minor_retreat:")
-        for objection in objections
+        objection.objection_kind
+        in {
+            ObjectionKind.FLANK_PAWN_WEAKENING,
+            ObjectionKind.CASTLED_FLANK_PAWN_WEAKENING,
+            ObjectionKind.FLANK_PAWN_LUNGE,
+            ObjectionKind.QUEEN_FLANK_INVASION,
+            ObjectionKind.UNANSWERED_ADVANCED_FLANK_PAWN,
+            ObjectionKind.OPENING_KING_WALK,
+            ObjectionKind.OPENING_KING_CENTER_FLIGHT,
+            ObjectionKind.OPENING_MINOR_RETREAT,
+        }
+        for objection in objection_evidence
     )
 
 
@@ -984,8 +1477,8 @@ def should_scan_reply_forced_mate(
     board: OwnedBoard,
     move: Any,
     *,
-    reasons: list[str],
-    objections: list[str],
+    reason_evidence: list[ArgumentEvidence],
+    objection_evidence: list[ArgumentEvidence],
     legal_move_count: int | None = None,
 ) -> bool:
     if search_depth not in {0, 1, 2}:
@@ -998,90 +1491,76 @@ def should_scan_reply_forced_mate(
     if search_depth == 1:
         if piece.lower() == "k":
             return True
-        if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objections, -100):
+        if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objection_evidence, -100):
             return True
-        if has_search_refutation_at_most(objections, -200):
+        if has_search_refutation_at_most(objection_evidence, -200):
             return True
         if (
             legal_move_count is not None
             and legal_move_count <= 2
             and board.in_check(board.turn)
-            and has_search_refutation_at_most(objections, -700)
+            and has_search_refutation_at_most(objection_evidence, -700)
         ):
             return True
         if (
             legal_move_count is not None
             and legal_move_count <= 20
-            and has_search_refutation_at_most(objections, -700)
+            and has_search_refutation_at_most(objection_evidence, -700)
         ):
             return True
-        has_threat_reason = any(
-            reason.startswith("tactical:threat:")
-            for reason in reasons
-        )
+        has_threat_reason = has_tactical_threat_reason(reason_evidence)
         if (
             piece.lower() != "p"
             and has_threat_reason
-            and has_search_refutation_at_most(objections, -100)
+            and has_search_refutation_at_most(objection_evidence, -100)
         ):
             return True
-        return has_search_refutation_at_most(objections, -700) and (
+        return has_search_refutation_at_most(objection_evidence, -700) and (
             piece.lower() != "p" or has_threat_reason
         )
     if piece.lower() == "k":
         return True
-    if has_large_search_refutation(objections):
+    if has_large_search_refutation(objection_evidence):
         return True
     if piece.lower() in {"n", "b", "r", "q"} and has_material_capture_at_least(
-        reasons,
+        reason_evidence,
         OWNED_PIECE_VALUE["n"],
     ):
         return True
-    if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objections, -400):
+    if piece.lower() in {"q", "r"} and has_search_refutation_at_most(objection_evidence, -400):
         return True
-    has_threat_reason = any(
-        reason.startswith("tactical:threat:")
-        for reason in reasons
-    )
+    has_threat_reason = has_tactical_threat_reason(reason_evidence)
     if not has_threat_reason:
         return False
     if piece.lower() in {"q", "r"}:
         return True
     return any(
-        objection.startswith("safety:moved_piece_en_pris:")
-        for objection in objections
+        objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
+        for objection in objection_evidence
     )
 
 
-def has_large_search_refutation(objections: list[str]) -> bool:
+def has_large_search_refutation(objections: list[ArgumentEvidence]) -> bool:
     return has_search_refutation_at_most(objections, -1_000)
 
 
-def has_material_capture_at_least(reasons: list[str], threshold: int) -> bool:
-    prefix = "material:capture:"
-    for reason in reasons:
-        if not reason.startswith(prefix):
-            continue
-        try:
-            if int(reason.removeprefix(prefix)) >= threshold:
-                return True
-        except ValueError:
-            continue
-    return False
+def has_material_capture_at_least(reasons: list[ArgumentEvidence], threshold: int) -> bool:
+    return any(
+        reason.world == EvidenceWorld.MATERIAL
+        and reason.support_strength >= material_support_strength(threshold)
+        for reason in reasons
+    )
 
 
-def has_search_refutation_at_most(objections: list[str], threshold: int) -> bool:
+def has_tactical_threat_reason(reasons: list[ArgumentEvidence]) -> bool:
+    return any(reason.tactical_threat_value > 0 for reason in reasons)
+
+
+def has_search_refutation_at_most(objections: list[ArgumentEvidence], threshold: int) -> bool:
     for objection in objections:
-        if not objection.startswith("search_refutes:"):
-            continue
-        parts = objection.split(":")
-        if len(parts) != 3:
-            continue
-        try:
-            if int(parts[2]) <= threshold:
-                return True
-        except ValueError:
-            continue
+        score = objection.search_refutation_score
+        if score is not None and score <= threshold:
+            return True
     return False
 
 
@@ -1095,11 +1574,12 @@ def owned_board_from_fen(fen: str) -> OwnedBoard:
     return OwnedBoard.from_fen(fen)
 
 
-def positional_reason_labels(board: OwnedBoard, move: Any, child: OwnedBoard) -> tuple[str, ...]:
+def positional_reason_labels(board: OwnedBoard, move: Any, child: OwnedBoard) -> EvidenceLabels:
     piece = board.piece_at(move.from_square)
     if piece is None:
-        return ()
+        return EvidenceLabels(())
     labels: list[str] = []
+    evidence: list[ArgumentEvidence] = []
     move_text = move.uci()
     kind = piece.lower()
     color = piece_color(piece)
@@ -1107,25 +1587,41 @@ def positional_reason_labels(board: OwnedBoard, move: Any, child: OwnedBoard) ->
     to_rank = rank_of(move.to_square)
 
     if kind == "p" and file_of(move.from_square) in {3, 4} and abs(to_rank - from_rank) == 2:
-        labels.append(f"development:{move_text}:center_pawn")
+        label = f"development:{move_text}:center_pawn"
+        labels.append(label)
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.DEVELOPMENT))
     if kind in {"n", "b"} and from_rank == (0 if color == "w" else 7):
-        labels.append(f"development:{move_text}:minor_piece")
+        label = f"development:{move_text}:minor_piece"
+        labels.append(label)
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.DEVELOPMENT))
     if move.kind == "castle":
-        labels.append(f"king_safety:{move_text}:castle")
+        label = f"king_safety:{move_text}:castle"
+        labels.append(label)
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
 
     center_count = moved_piece_center_control(child, move.to_square, piece)
     if center_count:
-        labels.append(f"center_control:{move_text}:{center_count}")
+        label = f"center_control:{move_text}:{center_count}"
+        labels.append(label)
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
     activity_gain = moved_piece_activity_gain(board, child, move.from_square, move.to_square, piece)
     if activity_gain > 0:
-        labels.append(f"piece_activity:{move_text}:mobility_gain:{activity_gain}")
+        label = f"piece_activity:{move_text}:mobility_gain:{activity_gain}"
+        labels.append(label)
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
     if kind == "p" and is_passed_pawn(child, move.to_square, color):
-        labels.append(f"pawn_structure:{move_text}:passed_pawn")
+        label = f"pawn_structure:{move_text}:passed_pawn"
+        labels.append(label)
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
     if kind in {"r", "q"} and controls_open_file(child, move.to_square):
-        labels.append(f"file_control:{move_text}:open_file")
+        label = f"file_control:{move_text}:open_file"
+        labels.append(label)
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
     if kind == "n" and is_supported_outpost(child, move.to_square, color):
-        labels.append(f"outpost:{move_text}:supported")
-    return tuple(labels)
+        label = f"outpost:{move_text}:supported"
+        labels.append(label)
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
+    return EvidenceLabels(tuple(labels), tuple(evidence))
 
 
 def moved_piece_center_control(board: OwnedBoard, source_square: int, piece: str) -> int:
