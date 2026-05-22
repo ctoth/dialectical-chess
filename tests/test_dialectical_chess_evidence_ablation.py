@@ -416,35 +416,7 @@ def test_depth_zero_candidate_scan_runs_with_dialectic_reply_analysis() -> None:
         )
     ).choose_move(board)
 
-    assert decision.move_uci in {
-        "h8g8",
-        "d8c8",
-        "d8b8",
-        "d8a8",
-        "d8d7",
-        "h5h6",
-        "h5g5",
-        "h5f5",
-        "h5e5",
-        "h5d5",
-        "h5c5",
-        "h5b5",
-        "h5h4",
-        "h5h3",
-        "h5h2",
-        "h5h1",
-        "a5b7",
-        "a5c4",
-        "a5b3",
-        "h7h6",
-        "g7g6",
-        "c7c6",
-        "f6f5",
-        "d6d5",
-        "b6b5",
-        "g7g5",
-        "c7c5",
-    }
+    assert decision.move_uci != "a5c6"
 
 
 def test_depth_zero_checks_forced_reply_mate_for_top_king_moves() -> None:
@@ -1279,7 +1251,6 @@ def test_argument_d2_solves_mined_positional_regressions(
     fen: str,
     expected_uci: str,
 ) -> None:
-    assert puzzle_id
     board = owned_board_from_fen(fen)
 
     decision = DialecticalChessEngine(

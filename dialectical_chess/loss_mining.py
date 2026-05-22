@@ -78,10 +78,6 @@ def engine_color_for_loss(game: chess.pgn.Game, engine_name: str) -> bool | None
     return None
 
 
-def has_immediate_mate(board: chess.Board) -> bool:
-    return has_forced_mate(board, mate_depth=1)
-
-
 def has_forced_mate(
     board: Any,
     *,

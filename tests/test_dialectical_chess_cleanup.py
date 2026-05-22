@@ -3,14 +3,10 @@ from __future__ import annotations
 from argparse import Namespace
 from io import StringIO
 
-import pytest
-
-
 from dialectical_chess.baselines import fastchess_baseline  # noqa: E402
 
 
 def test_uci_position_parses_startpos_moves() -> None:
-    pytest.importorskip("chess")
     from dialectical_chess.uci import parse_uci_position
 
     board = parse_uci_position("position startpos moves e2e4 e7e5")
@@ -19,7 +15,6 @@ def test_uci_position_parses_startpos_moves() -> None:
 
 
 def test_uci_position_tracks_position_history() -> None:
-    pytest.importorskip("chess")
     from dialectical_chess.uci import parse_uci_position_state
 
     state = parse_uci_position_state("position startpos moves e2e4 e7e5 g1f3 b8c6")
@@ -29,7 +24,6 @@ def test_uci_position_tracks_position_history() -> None:
 
 
 def test_uci_loop_passes_position_history_to_engine(monkeypatch) -> None:
-    pytest.importorskip("chess")
     import dialectical_chess.uci as uci
 
     seen_history_lengths: list[int] = []
@@ -61,7 +55,6 @@ def test_uci_loop_passes_position_history_to_engine(monkeypatch) -> None:
 
 
 def test_critical_clock_disables_expensive_dialectical_evidence() -> None:
-    pytest.importorskip("chess")
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
     from dialectical_chess.uci import parse_go, settings_for_go_request
@@ -82,7 +75,6 @@ def test_critical_clock_disables_expensive_dialectical_evidence() -> None:
 
 
 def test_epd_parses_best_and_avoid_moves() -> None:
-    pytest.importorskip("chess")
     from dialectical_chess.bench import parse_epd_case
 
     case = parse_epd_case(
@@ -106,7 +98,6 @@ def test_stockfish_baseline_command_uses_strength_limit() -> None:
 
 
 def test_no_legal_moves_returns_uci_null_move() -> None:
-    pytest.importorskip("chess")
     from dialectical_chess.uci import choose_uci_move, parse_uci_position
 
     board = parse_uci_position("position fen 7k/5KQ1/8/8/8/8/8/8 b - - 0 1")

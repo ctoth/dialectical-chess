@@ -210,9 +210,6 @@ def choose_uci_move(
     if decision.selected is None:
         return "0000"
     if output_stream is not None:
-        _uci_write(output_stream, f"info string positional_reasons={settings.positional_reasons}")
-        _uci_write(output_stream, f"info string reply_mate_scan={settings.reply_mate_scan}")
-        _uci_write(output_stream, f"info string reply_analysis={settings.reply_analysis}")
         _uci_write(output_stream, f"info score cp {decision.selected.score} pv {decision.move_uci}")
     return decision.move_uci
 
