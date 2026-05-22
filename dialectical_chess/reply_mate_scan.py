@@ -10,7 +10,15 @@ import chess
 
 from dialectical_chess.arguments import MoveProbe
 from dialectical_chess.board import OwnedBoard
-from dialectical_chess.evidence import ArgumentEvidence, EvidenceWorld, ObjectionKind
+from dialectical_chess.evidence import (
+    ArgumentEvidence,
+    EvidenceWorld,
+    ObjectionKind,
+    ObjectionEvidence,
+    SupportEvidence,
+    DefeaterEvidence,
+    has_search_refutation_at_most,
+)
 from dialectical_chess.heuristics.evidence import EvidenceLabels, material_support_strength, objection
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.search import OWNED_PIECE_VALUE, owned_is_checkmate
@@ -221,6 +229,8 @@ def forced_reply_mate_scan_candidates(
 
 def forced_reply_mate_risk_sort_key(objections: tuple[ArgumentEvidence, ...]) -> int:
     if any(
+        isinstance(objection, ObjectionEvidence)
+        and
         objection.objection_kind
         in {
             ObjectionKind.FLANK_PAWN_WEAKENING,
@@ -291,6 +301,7 @@ def search_refutation_sort_key(objections: tuple[ArgumentEvidence, ...]) -> int:
     scores = [
         score
         for objection in objections
+        if isinstance(objection, ObjectionEvidence)
         if (score := objection.search_refutation_score) is not None
     ]
     return min(scores, default=0)
@@ -317,6 +328,8 @@ def should_scan_reply_mate(
     if piece is not None and piece.lower() in {"q", "r"} and has_tactical_threat_reason(reason_evidence):
         return True
     return any(
+        isinstance(objection, ObjectionEvidence)
+        and
         objection.objection_kind
         in {
             ObjectionKind.FLANK_PAWN_WEAKENING,
@@ -395,31 +408,25 @@ def should_scan_reply_forced_mate(
     if piece.lower() in {"q", "r"}:
         return True
     return any(
-        objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
+        isinstance(objection, ObjectionEvidence)
+        and objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
         for objection in objection_evidence
     )
-
-
 def has_large_search_refutation(objections: list[ArgumentEvidence]) -> bool:
     return has_search_refutation_at_most(objections, -1_000)
-
-
 def has_material_capture_at_least(reasons: list[ArgumentEvidence], threshold: int) -> bool:
     return any(
-        reason.world == EvidenceWorld.MATERIAL
+        isinstance(reason, SupportEvidence | DefeaterEvidence)
+        and reason.world == EvidenceWorld.MATERIAL
         and reason.support_strength >= material_support_strength(threshold)
         for reason in reasons
     )
 
 
 def has_tactical_threat_reason(reasons: list[ArgumentEvidence]) -> bool:
-    return any(reason.tactical_threat_value > 0 for reason in reasons)
-
-
-def has_search_refutation_at_most(objections: list[ArgumentEvidence], threshold: int) -> bool:
-    for objection in objections:
-        score = objection.search_refutation_score
-        if score is not None and score <= threshold:
-            return True
-    return False
+    return any(
+        isinstance(reason, SupportEvidence | DefeaterEvidence)
+        and reason.tactical_threat_value > 0
+        for reason in reasons
+    )
 

@@ -18,6 +18,7 @@ from dialectical_chess.evidence import (
     DefeaterKind,
     EvidenceWorld,
     ObjectionKind,
+    ObjectionEvidence,
     SupportKind,
     defeater_evidence,
     defeater_strength,
@@ -44,6 +45,7 @@ from dialectical_chess.tuning import (
 
 def has_reply_mate_in_one_objection(objections: list[ArgumentEvidence]) -> bool:
     return any(
-        objection.objection_kind == ObjectionKind.REPLY_MATE_IN_ONE
+        isinstance(objection, ObjectionEvidence)
+        and objection.objection_kind == ObjectionKind.REPLY_MATE_IN_ONE
         for objection in objections
     )

@@ -34,6 +34,8 @@ from dialectical_chess.heuristics.evidence import (
 from dialectical_chess.search import OWNED_PIECE_VALUE, owned_is_threefold_repetition
 from dialectical_chess.smt import moved_piece_attacks_square
 from dialectical_chess.tuning import (
+    FLANK_PAWN_LUNGE_PENALTY,
+    FLANK_PAWN_WEAKENING_PENALTY,
     KING_ESCAPE_SCORE,
     MAJOR_PIECE_VALUE,
     MOVED_PIECE_DEFENDED_SCORE,
@@ -96,22 +98,22 @@ def flank_pawn_weakening_objections(
         label = f"king_safety:castled_flank_pawn_weakening:{move.uci()}"
         labels.append(label)
         evidence.append(objection(label, kind=ObjectionKind.CASTLED_FLANK_PAWN_WEAKENING, strength=1))
-        score -= 900
+        score += FLANK_PAWN_WEAKENING_PENALTY
     elif king_square in {square_index("c1"), square_index("c8")} and from_file in {0, 1, 2}:
         label = f"king_safety:castled_flank_pawn_weakening:{move.uci()}"
         labels.append(label)
         evidence.append(objection(label, kind=ObjectionKind.CASTLED_FLANK_PAWN_WEAKENING, strength=1))
-        score -= 900
+        score += FLANK_PAWN_WEAKENING_PENALTY
     elif from_file in {6, 7}:
         label = f"king_safety:flank_pawn_weakening:{move.uci()}"
         labels.append(label)
         evidence.append(objection(label, kind=ObjectionKind.FLANK_PAWN_WEAKENING, strength=1))
-        score -= 900
+        score += FLANK_PAWN_WEAKENING_PENALTY
     if labels and abs(rank_of(move.to_square) - rank_of(move.from_square)) == 2:
         label = f"king_safety:flank_pawn_lunge:{move.uci()}"
         labels.append(label)
         evidence.append(objection(label, kind=ObjectionKind.FLANK_PAWN_LUNGE, strength=1))
-        score -= 400
+        score += FLANK_PAWN_LUNGE_PENALTY
     return EvidenceLabels(tuple(labels), tuple(evidence), score)
 
 def advanced_flank_pawn_response_labels(

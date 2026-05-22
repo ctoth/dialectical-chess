@@ -15,6 +15,8 @@ from dialectical_chess.evidence import (
     ArgumentEvidence,
     EvidenceWorld,
     ObjectionKind,
+    forced_mate_refutation_distance,
+    has_search_refutation_at_most,
     objection_evidence,
 )
 from dialectical_chess.loss_mining import has_forced_mate
@@ -147,11 +149,10 @@ def selected_reply_mate_depths(
 
 
 def selected_has_large_search_refutation(selected: MoveProbe) -> bool:
-    for objection in selected.objection_evidence:
-        score = objection.search_refutation_score
-        if score is not None and score <= LARGE_SEARCH_REFUTATION_THRESHOLD:
-            return True
-    return False
+    return has_search_refutation_at_most(
+        selected.objection_evidence,
+        LARGE_SEARCH_REFUTATION_THRESHOLD,
+    )
 
 
 def uses_selected_reply_mate_refutation(settings: EngineSettings) -> bool:
@@ -170,7 +171,10 @@ def selected_reply_mate_refutation(
 ) -> tuple[str, ArgumentEvidence] | None:
     if selected.is_checkmate:
         return None
-    if any(objection.forced_mate_distance is not None for objection in selected.objection_evidence):
+    if any(
+        forced_mate_refutation_distance(objection) is not None
+        for objection in selected.objection_evidence
+    ):
         return None
     move = move_by_uci.get(selected.uci)
     if move is None:

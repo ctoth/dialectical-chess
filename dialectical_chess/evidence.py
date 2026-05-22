@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TypeAlias
+from typing import Iterable, TypeAlias
 
 from dialectical_chess.tuning import (
     COMPENSATING_TACTICAL_THREAT_THRESHOLD,
@@ -88,42 +88,6 @@ class SupportEvidence:
     def supports_argument(self) -> bool:
         return self.support_strength > 0
 
-    @property
-    def objection_kind(self) -> ObjectionKind:
-        return ObjectionKind.NONE
-
-    @property
-    def objection_strength(self) -> int:
-        return 0
-
-    @property
-    def reply_attack_strength(self) -> int:
-        return 0
-
-    @property
-    def defense_strength(self) -> int:
-        return 0
-
-    @property
-    def defeater_kind(self) -> DefeaterKind | None:
-        return None
-
-    @property
-    def defeater_strength(self) -> int:
-        return 0
-
-    @property
-    def moved_piece_en_pris_value(self) -> int | None:
-        return None
-
-    @property
-    def search_refutation_score(self) -> int | None:
-        return None
-
-    @property
-    def forced_mate_distance(self) -> int | None:
-        return None
-
 
 @dataclass(frozen=True)
 class ObjectionEvidence:
@@ -136,54 +100,6 @@ class ObjectionEvidence:
     forced_mate_distance: int | None = None
     argument_value: str = "procedural"
     role: EvidenceRole = EvidenceRole.OBJECTION
-
-    @property
-    def supports_argument(self) -> bool:
-        return False
-
-    @property
-    def counts_as_positional(self) -> bool:
-        return False
-
-    @property
-    def counts_as_tactical(self) -> bool:
-        return False
-
-    @property
-    def support_strength(self) -> int:
-        return 0
-
-    @property
-    def support_kind(self) -> SupportKind:
-        return SupportKind.GENERIC
-
-    @property
-    def reply_attack_strength(self) -> int:
-        return 0
-
-    @property
-    def defense_strength(self) -> int:
-        return 0
-
-    @property
-    def defeater_kind(self) -> DefeaterKind | None:
-        return None
-
-    @property
-    def defeater_strength(self) -> int:
-        return 0
-
-    @property
-    def defended_piece_value(self) -> int | None:
-        return None
-
-    @property
-    def tactical_threat_value(self) -> int:
-        return 0
-
-    @property
-    def search_support_score(self) -> int | None:
-        return None
 
 
 @dataclass(frozen=True)
@@ -205,38 +121,6 @@ class DefeaterEvidence:
     def supports_argument(self) -> bool:
         return self.support_strength > 0
 
-    @property
-    def objection_kind(self) -> ObjectionKind:
-        return ObjectionKind.NONE
-
-    @property
-    def objection_strength(self) -> int:
-        return 0
-
-    @property
-    def reply_attack_strength(self) -> int:
-        return 0
-
-    @property
-    def defense_strength(self) -> int:
-        return 0
-
-    @property
-    def defended_piece_value(self) -> int | None:
-        return None
-
-    @property
-    def moved_piece_en_pris_value(self) -> int | None:
-        return None
-
-    @property
-    def search_refutation_score(self) -> int | None:
-        return None
-
-    @property
-    def forced_mate_distance(self) -> int | None:
-        return None
-
 
 @dataclass(frozen=True)
 class ReplyEvidence:
@@ -247,62 +131,6 @@ class ReplyEvidence:
     forced_mate_distance: int | None = None
     argument_value: str = "reply_refutation"
     role: EvidenceRole = EvidenceRole.REPLY
-
-    @property
-    def supports_argument(self) -> bool:
-        return False
-
-    @property
-    def counts_as_positional(self) -> bool:
-        return False
-
-    @property
-    def counts_as_tactical(self) -> bool:
-        return False
-
-    @property
-    def support_strength(self) -> int:
-        return 0
-
-    @property
-    def support_kind(self) -> SupportKind:
-        return SupportKind.GENERIC
-
-    @property
-    def objection_kind(self) -> ObjectionKind:
-        return ObjectionKind.NONE
-
-    @property
-    def objection_strength(self) -> int:
-        return 0
-
-    @property
-    def defeater_kind(self) -> DefeaterKind | None:
-        return None
-
-    @property
-    def defeater_strength(self) -> int:
-        return 0
-
-    @property
-    def defended_piece_value(self) -> int | None:
-        return None
-
-    @property
-    def moved_piece_en_pris_value(self) -> int | None:
-        return None
-
-    @property
-    def tactical_threat_value(self) -> int:
-        return 0
-
-    @property
-    def search_refutation_score(self) -> int | None:
-        return None
-
-    @property
-    def search_support_score(self) -> int | None:
-        return None
 
 
 def support_evidence(
@@ -513,18 +341,37 @@ def defeater_strength(defeater_kind: DefeaterKind) -> int:
 
 
 def is_forced_mate_refutation(evidence: ArgumentEvidence) -> bool:
-    if evidence.search_refutation_score is not None:
+    if isinstance(evidence, ObjectionEvidence) and evidence.search_refutation_score is not None:
         return evidence.search_refutation_score <= -100_000
-    return evidence.forced_mate_distance is not None
+    if isinstance(evidence, ObjectionEvidence | ReplyEvidence):
+        return evidence.forced_mate_distance is not None
+    return False
 
 
 def forced_mate_refutation_distance(evidence: ArgumentEvidence) -> int | None:
     """Return the proven mate distance for a hard refutation, when encoded."""
-    return evidence.forced_mate_distance
+    if isinstance(evidence, ObjectionEvidence | ReplyEvidence):
+        return evidence.forced_mate_distance
+    return None
 
 
 def is_large_search_refutation(evidence: ArgumentEvidence) -> bool:
     return (
-        evidence.search_refutation_score is not None
+        isinstance(evidence, ObjectionEvidence)
+        and evidence.search_refutation_score is not None
         and evidence.search_refutation_score <= LARGE_SEARCH_REFUTATION_THRESHOLD
     )
+
+
+def has_search_refutation_at_most(
+    evidence_items: Iterable[ArgumentEvidence],
+    threshold: int,
+) -> bool:
+    for evidence in evidence_items:
+        if (
+            isinstance(evidence, ObjectionEvidence)
+            and evidence.search_refutation_score is not None
+            and evidence.search_refutation_score <= threshold
+        ):
+            return True
+    return False

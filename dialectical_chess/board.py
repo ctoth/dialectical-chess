@@ -8,9 +8,9 @@ from typing import Any, Iterable
 
 import chess
 
+from dialectical_chess.tuning import PIECE_VALUE
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-PIECE_VALUES = {"P": 100, "N": 320, "B": 330, "R": 500, "Q": 900, "K": 0}
 FILES = "abcdefgh"
 PROMOTIONS = ("q", "r", "b", "n")
 KNIGHT_DELTAS = ((1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1), (-2, 1), (-1, 2))
@@ -102,7 +102,7 @@ class OwnedBoard:
         for piece in self.squares:
             if piece is None:
                 continue
-            value = PIECE_VALUES[piece.upper()]
+            value = PIECE_VALUE[piece.lower()]
             if piece.isupper():
                 white += value
             else:
@@ -461,7 +461,7 @@ def parse_placement(placement: str) -> tuple[str | None, ...]:
                 previous_digit = True
                 continue
             previous_digit = False
-            if char.upper() not in PIECE_VALUES:
+            if char.lower() not in PIECE_VALUE:
                 raise ValueError(f"unknown FEN piece: {char}")
             if file_index >= 8:
                 raise ValueError("too many files in FEN rank")

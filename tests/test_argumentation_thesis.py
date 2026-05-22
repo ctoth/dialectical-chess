@@ -65,7 +65,9 @@ from dialectical_chess.static_prior import (  # noqa: E402
 from dialectical_chess.arguments import MoveProbe  # noqa: E402
 from dialectical_chess.evidence import (  # noqa: E402
     EvidenceWorld,
+    ObjectionEvidence,
     ObjectionKind,
+    ReplyEvidence,
     SupportKind,
     objection_evidence,
     reply_evidence,
@@ -688,6 +690,7 @@ def test_defended_reply_mate_is_suppressed_not_hard_filtered() -> None:
         reply_attacks=("reply_mate:defended:a1a2",),
     )
     evidence = defended.reply_attack_evidence[0]
+    assert isinstance(evidence, ReplyEvidence)
     assert evidence.reply_attack_strength == 7
     assert evidence.defense_strength == 13
     assert not is_forced_mate_refutation(evidence)
@@ -752,6 +755,7 @@ def test_forced_mate_refutation_predicate_is_the_filter_membership_rule() -> Non
     mate_objections = [
         ev
         for ev in by_uci["c2c4"].objection_evidence
+        if isinstance(ev, ObjectionEvidence)
         if ev.objection_kind == ObjectionKind.REPLY_MATE_IN_ONE
     ]
     assert mate_objections

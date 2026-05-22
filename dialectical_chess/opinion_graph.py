@@ -13,10 +13,15 @@ from dialectical_chess.evidence import (
     COMPENSATING_TACTICAL_THREAT_THRESHOLD,
     ArgumentEvidence,
     DefeaterKind,
+    DefeaterEvidence,
     ObjectionKind,
     EvidenceWorld,
+    ObjectionEvidence,
+    ReplyEvidence,
+    SupportEvidence,
     SupportKind,
     defeater_evidence as make_defeater_evidence,
+    has_search_refutation_at_most,
     is_forced_mate_refutation,
 )
 from dialectical_chess.static_prior import squash, static_prior
@@ -83,7 +88,9 @@ def build_argumentation_artifacts(
         support_items = [
             evidence
             for evidence in probe.reason_evidence
-            if evidence.supports_argument and evidence.support_strength > 0
+            if isinstance(evidence, SupportEvidence | DefeaterEvidence)
+            and evidence.supports_argument
+            and evidence.support_strength > 0
         ]
         support_strength = sum(evidence.support_strength for evidence in support_items)
         if support_strength > 0:
@@ -154,14 +161,26 @@ def effective_objection_strength(
     probe: MoveProbe,
     objection: ArgumentEvidence,
 ) -> int:
-    strength = objection.objection_strength + objection.reply_attack_strength
+    strength = 0
+    if isinstance(objection, ObjectionEvidence):
+        strength = objection.objection_strength
+    elif isinstance(objection, ReplyEvidence):
+        strength = objection.reply_attack_strength
     if strength <= 0:
         return 0
     suppression = sum(
-        defeater.defeater_strength + defeater.defense_strength
+        defeater_strength_value(defeater)
         for defeater in objection_defeater_evidence(probe, objection)
     )
     return max(0, strength - suppression)
+
+
+def defeater_strength_value(evidence: ArgumentEvidence) -> int:
+    if isinstance(evidence, DefeaterEvidence):
+        return evidence.defeater_strength
+    if isinstance(evidence, ReplyEvidence):
+        return evidence.defense_strength
+    return 0
 
 
 def objection_defeater_evidence(
@@ -169,6 +188,12 @@ def objection_defeater_evidence(
     objection: ArgumentEvidence,
 ) -> tuple[ArgumentEvidence, ...]:
     defeaters: list[ArgumentEvidence] = []
+    if isinstance(objection, ReplyEvidence):
+        if objection.defense_strength > 0:
+            defeaters.append(objection)
+        return tuple(defeaters)
+    if not isinstance(objection, ObjectionEvidence):
+        return tuple(defeaters)
     if (
         objection.objection_kind == ObjectionKind.QUEEN_BLUNDER
         and has_compensating_forcing_pressure(probe)
@@ -197,8 +222,6 @@ def objection_defeater_evidence(
         and has_typed_reason_defeater(probe, DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE)
     ):
         defeaters.append(synthetic_defeater_evidence(DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE))
-    if objection.defense_strength > 0:
-        defeaters.append(objection)
     return tuple(defeaters)
 
 
@@ -227,7 +250,8 @@ def defeater_strength_for(defeater_kind: DefeaterKind) -> int:
 
 def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
     return any(
-        evidence.tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD
+        isinstance(evidence, SupportEvidence | DefeaterEvidence)
+        and evidence.tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD
         for evidence in probe.reason_evidence
     )
 
@@ -243,7 +267,10 @@ def has_forcing_material_gain(probe: MoveProbe) -> bool:
 
 
 def has_typed_reason_defeater(probe: MoveProbe, defeater_kind: DefeaterKind) -> bool:
-    return any(evidence.defeater_kind == defeater_kind for evidence in probe.reason_evidence)
+    return any(
+        isinstance(evidence, DefeaterEvidence) and evidence.defeater_kind == defeater_kind
+        for evidence in probe.reason_evidence
+    )
 
 
 def material_or_promotion_gain(probe: MoveProbe) -> int:
@@ -254,34 +281,34 @@ def material_safety_prior_penalty_for(
     probe: MoveProbe,
     objection: ArgumentEvidence,
 ) -> int:
+    if not isinstance(objection, ObjectionEvidence):
+        return 0
     if objection.objection_kind == ObjectionKind.QUEEN_FLANK_INVASION:
-        if has_development_reason(probe) and not has_search_refutation_at_most(probe, -300):
+        if has_development_reason(probe) and not has_search_refutation_at_most(
+            probe.objection_evidence, -300
+        ):
             return 0
         return 300
     if (
         objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
         and objection.moved_piece_en_pris_value is not None
-        and has_search_refutation_at_most(probe, -400)
+        and has_search_refutation_at_most(probe.objection_evidence, -400)
     ):
         return 4 * objection.moved_piece_en_pris_value
     if (
         objection.objection_kind == ObjectionKind.IGNORED_HANGING_PIECE
-        and has_search_refutation_at_most(probe, -400)
+        and has_search_refutation_at_most(probe.objection_evidence, -400)
     ):
         return 300
     return 0
 
 
-def has_search_refutation_at_most(probe: MoveProbe, threshold: int) -> bool:
-    for evidence in probe.objection_evidence:
-        score = evidence.search_refutation_score
-        if score is not None and score <= threshold:
-            return True
-    return False
-
-
 def has_development_reason(probe: MoveProbe) -> bool:
-    return any(evidence.support_kind == SupportKind.DEVELOPMENT for evidence in probe.reason_evidence)
+    return any(
+        isinstance(evidence, SupportEvidence | DefeaterEvidence)
+        and evidence.support_kind == SupportKind.DEVELOPMENT
+        for evidence in probe.reason_evidence
+    )
 
 
 def move_argument_id(uci: str) -> str:

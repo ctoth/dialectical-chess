@@ -16,9 +16,11 @@ from dialectical_chess.board import (
 from dialectical_chess.evidence import (
     ArgumentEvidence,
     DefeaterKind,
+    DefeaterEvidence,
     EvidenceWorld,
     ObjectionKind,
     SupportKind,
+    SupportEvidence,
     defeater_evidence,
     defeater_strength,
     material_cost_objection_strength,
@@ -55,7 +57,12 @@ def unsupported_major_drift_objections(
         return EvidenceLabels(())
     if board.fullmove_number > 35 or captured_value > 0 or gives_check:
         return EvidenceLabels(())
-    if any(reason.supports_argument and reason.counts_as_tactical for reason in reason_evidence):
+    if any(
+        isinstance(reason, SupportEvidence | DefeaterEvidence)
+        and reason.supports_argument
+        and reason.counts_as_tactical
+        for reason in reason_evidence
+    ):
         return EvidenceLabels(())
     label = f"strategy:unsupported_major_drift:{move.uci()}"
     return EvidenceLabels(
