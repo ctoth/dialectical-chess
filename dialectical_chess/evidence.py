@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable, TypeAlias
 
+from dialectical_chess.scheme import Tier
 from dialectical_chess.tuning import (
     COMPENSATING_TACTICAL_THREAT_THRESHOLD,
     LARGE_SEARCH_REFUTATION_THRESHOLD,
@@ -83,6 +84,7 @@ class SupportEvidence:
     search_support_score: int | None = None
     support_kind: SupportKind = SupportKind.GENERIC
     role: EvidenceRole = EvidenceRole.SUPPORT
+    tier: Tier = Tier.HEURISTIC
 
     @property
     def supports_argument(self) -> bool:
@@ -100,6 +102,7 @@ class ObjectionEvidence:
     forced_mate_distance: int | None = None
     argument_value: str = "procedural"
     role: EvidenceRole = EvidenceRole.OBJECTION
+    tier: Tier = Tier.HEURISTIC
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,7 @@ class DefeaterEvidence:
     search_support_score: int | None = None
     support_kind: SupportKind = SupportKind.GENERIC
     role: EvidenceRole = EvidenceRole.DEFEATER
+    tier: Tier = Tier.HEURISTIC
 
     @property
     def supports_argument(self) -> bool:
@@ -131,6 +135,7 @@ class ReplyEvidence:
     forced_mate_distance: int | None = None
     argument_value: str = "reply_refutation"
     role: EvidenceRole = EvidenceRole.REPLY
+    tier: Tier = Tier.HEURISTIC
 
 
 def support_evidence(
@@ -160,6 +165,45 @@ def support_evidence(
     )
 
 
+# --- objection tier classification (design D1) ------------------------------
+#
+# The explicit, typed form of chess's formerly implicit FACT/graded split. A
+# FACT objection is a proven loss — a forced-mate refutation or a confirmed
+# material loss; a HEURISTIC objection is a positional judgement. This is the
+# chess analogue of checkers' label->Tier table (``checkers evidence.py
+# _FIXED``): one closed mapping, no prefix dispatch. The generic graph builder
+# and decider read ``evidence.tier``; this function is the only place an
+# ``ObjectionKind`` is mapped to a tier.
+
+_FACT_OBJECTION_KINDS: frozenset[ObjectionKind] = frozenset(
+    {
+        # Forced-mate / search refutations — proven by search.
+        ObjectionKind.SEARCH_REFUTATION,
+        ObjectionKind.REPLY_MATE_IN_ONE,
+        ObjectionKind.REPLY_FORCED_MATE,
+        # Material-safety objections — a confirmed material loss (design D2:
+        # chess's ``material_safety`` reframed as honest FACT-tier evidence).
+        ObjectionKind.IGNORED_HANGING_PIECE,
+        ObjectionKind.MOVED_PIECE_EN_PRIS,
+        ObjectionKind.QUEEN_BLUNDER,
+        ObjectionKind.QUEEN_FLANK_INVASION,
+    }
+)
+
+
+def objection_tier(objection_kind: ObjectionKind) -> Tier:
+    """Return the :class:`Tier` of an objection kind (design D1).
+
+    FACT for a proven loss — a forced-mate / search refutation or a confirmed
+    material loss; HEURISTIC for a positional judgement (opening play, flank
+    pawn structure, positional drift). The generic argumentation layer keys
+    its FACT-then-graded ordering off this tier, never off the kind itself.
+    """
+    if objection_kind in _FACT_OBJECTION_KINDS:
+        return Tier.FACT
+    return Tier.HEURISTIC
+
+
 def objection_evidence(
     label: str,
     *,
@@ -180,6 +224,7 @@ def objection_evidence(
         search_refutation_score=search_refutation_score,
         forced_mate_distance=forced_mate_distance,
         argument_value=argument_value,
+        tier=objection_tier(objection_kind),
     )
 
 
@@ -220,6 +265,9 @@ def reply_evidence(
     forced_mate_distance: int | None = None,
     argument_value: str = "reply_refutation",
 ) -> ReplyEvidence:
+    # A reply that proves a forced mate is FACT-tier; a soft reply attack is a
+    # HEURISTIC judgement (design D1).
+    tier = Tier.FACT if forced_mate_distance is not None else Tier.HEURISTIC
     return ReplyEvidence(
         label=label,
         world=EvidenceWorld.REPLY,
@@ -227,6 +275,7 @@ def reply_evidence(
         defense_strength=defense_strength,
         forced_mate_distance=forced_mate_distance,
         argument_value=argument_value,
+        tier=tier,
     )
 
 

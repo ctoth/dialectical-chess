@@ -1,4 +1,17 @@
-"""Opinion-valued Phase-2 move decider."""
+"""Opinion-valued move decider — the lexicographic FACT-then-graded key.
+
+The decider is a single lexicographic key (design D2, modelled on
+dialectical-checkers' decider): the FACT-tier term — the worst proven
+material loss a move walks into — is ordered strictly before the graded term
+— the move's opinion-valued ``expectation()``. A FACT decision always
+dominates a graded one.
+
+The FACT material-loss term is supplied by the chess
+:mod:`~dialectical_chess.suppression` policy (``fact_material_loss``); this
+module names no chess objection kind. Chess's ``material_safety`` penalties
+used to be smuggled into the opinion base-rate and a flat argmax penalty;
+this decider consults the loss as an honest, ordered FACT key term instead.
+"""
 
 from __future__ import annotations
 
@@ -9,18 +22,14 @@ from doxa import Opinion
 from doxa.argumentation import evaluate
 
 from dialectical_chess.arguments import MoveProbe
-from dialectical_chess.evidence import (
-    ObjectionKind,
-    ObjectionEvidence,
-    forced_mate_refutation_distance,
-    has_search_refutation_at_most,
-)
+from dialectical_chess.evidence import forced_mate_refutation_distance
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.opinion_graph import (
     MoveArgumentationArtifacts,
     build_argumentation_artifacts,
 )
 from dialectical_chess.skeptical_filter import skeptical_survivors
+from dialectical_chess.suppression import fact_material_loss
 
 SLOWEST_LOSS_MAX_MATE_DEPTH = 4
 
@@ -35,7 +44,12 @@ class ArgumentationDecision:
 
 
 def choose_move_argumentation(probes: list[MoveProbe]) -> ArgumentationDecision:
-    """Return the Phase-2 argumentation decision for the input probes."""
+    """Return the argumentation decision for the input probes.
+
+    Builds the opinion graph and the Dung filter, takes the grounded crisp
+    survivors (or — when every move is hard-refuted — falls back to all
+    moves), and picks the survivor maximising the lexicographic selection key.
+    """
     if not probes:
         raise ValueError("position has no legal moves")
     artifacts: MoveArgumentationArtifacts = build_argumentation_artifacts(probes)
@@ -65,10 +79,25 @@ def expectation_selection_key(
     probe: MoveProbe,
     artifacts: MoveArgumentationArtifacts,
     opinions: dict[str, Opinion],
-) -> tuple[float, float, str]:
+) -> tuple[int, float, str]:
+    """The lexicographic selection key for a crisp survivor (design D2).
+
+    The key is consumed by ``max`` — larger is better. Its terms, in order:
+
+    1. the FACT term — the negated worst proven material loss
+       (:func:`~dialectical_chess.suppression.fact_material_loss`). A move
+       with no proven loss scores 0 here and outranks every move that walks
+       into one; among moves that do, the smaller loss outranks the larger.
+       This term is the FACT-tier prefix of the key: it dominates the graded
+       term completely (design D2 — fact-as-highest-value).
+    2. the graded term — the move's opinion-valued ``expectation()`` over the
+       crisp survivors.
+    3. the deterministic tiebreak — the move UCI (the lexicographically
+       largest UCI wins an exact tie).
+    """
     expectation = opinions[artifacts.move_arg[probe.uci]].expectation()
     return (
-        expectation - material_safety_selection_penalty(probe),
+        -fact_material_loss(probe),
         expectation,
         probe.uci,
     )
@@ -79,6 +108,12 @@ def empty_survivors_selection_key(
     artifacts: MoveArgumentationArtifacts,
     opinions: dict[str, Opinion],
 ) -> tuple[int, float, str]:
+    """The selection key for the empty-survivor fallback (design v2 §5d).
+
+    When every legal move is hard-refuted there is no clean choice; the
+    decider picks the least-bad move — the slowest proven loss, then the
+    highest graded ``expectation()``, then the largest UCI.
+    """
     return (
         slowest_loss_distance(probe),
         opinions[artifacts.move_arg[probe.uci]].expectation(),
@@ -87,6 +122,13 @@ def empty_survivors_selection_key(
 
 
 def slowest_loss_distance(probe: MoveProbe) -> int:
+    """Return the proven mate distance a hard-refuted move walks into.
+
+    A larger distance is a slower loss — better, under the empty-survivor
+    fallback. Reads the post-move board (when the probe carries one) to scan
+    for a forced mate, falling back to the forced-mate distance encoded in the
+    move's objection / reply-attack evidence.
+    """
     if probe.post_fen is not None:
         board = chess.Board(probe.post_fen)
         for mate_depth in range(1, SLOWEST_LOSS_MAX_MATE_DEPTH + 1):
@@ -98,44 +140,3 @@ def slowest_loss_distance(probe: MoveProbe) -> int:
         if (distance := forced_mate_refutation_distance(evidence)) is not None
     ]
     return min(distances, default=0)
-
-
-def material_safety_selection_penalty(probe: MoveProbe) -> float:
-    if (
-        has_search_refutation_at_most(probe.objection_evidence, -300)
-        and has_moved_piece_en_pris_objection(probe)
-        and has_ignored_hanging_piece_objection(probe)
-    ):
-        return 1.0
-    if not has_search_refutation_at_most(probe.objection_evidence, -400):
-        return 0.0
-    for evidence in probe.objection_evidence:
-        if not isinstance(evidence, ObjectionEvidence):
-            continue
-        if evidence.objection_kind == ObjectionKind.IGNORED_HANGING_PIECE:
-            return 1.0
-        if (
-            evidence.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
-            and evidence.moved_piece_en_pris_value is not None
-            and evidence.moved_piece_en_pris_value >= 300
-        ):
-            return 1.0
-    return 0.0
-
-
-def has_moved_piece_en_pris_objection(probe: MoveProbe) -> bool:
-    return any(
-        isinstance(evidence, ObjectionEvidence)
-        and evidence.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
-        and evidence.moved_piece_en_pris_value is not None
-        and evidence.moved_piece_en_pris_value >= 300
-        for evidence in probe.objection_evidence
-    )
-
-
-def has_ignored_hanging_piece_objection(probe: MoveProbe) -> bool:
-    return any(
-        isinstance(evidence, ObjectionEvidence)
-        and evidence.objection_kind == ObjectionKind.IGNORED_HANGING_PIECE
-        for evidence in probe.objection_evidence
-    )

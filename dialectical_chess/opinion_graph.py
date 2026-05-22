@@ -1,4 +1,12 @@
-"""Opinion-valued Phase-2 argumentation artifacts."""
+"""Opinion-valued argumentation artifacts — the generic graph builder.
+
+This is the generic, game-agnostic half of the cartridge seam. It builds a
+``doxa.BipolarOpinionGraph`` and a Dung filter framework from typed evidence,
+reading only the generic discriminants — a piece of evidence's role
+(support / objection / defeater / reply) and its strength. It never names a
+chess objection kind: the chess-specific suppression policy lives behind the
+``suppression`` hook (design D3).
+"""
 
 from __future__ import annotations
 
@@ -10,20 +18,14 @@ from doxa.argumentation import BipolarOpinionGraph
 
 from dialectical_chess.arguments import MoveProbe
 from dialectical_chess.evidence import (
-    COMPENSATING_TACTICAL_THREAT_THRESHOLD,
     ArgumentEvidence,
-    DefeaterKind,
     DefeaterEvidence,
-    ObjectionKind,
-    EvidenceWorld,
     ObjectionEvidence,
     ReplyEvidence,
     SupportEvidence,
-    SupportKind,
-    defeater_evidence as make_defeater_evidence,
-    has_search_refutation_at_most,
     is_forced_mate_refutation,
 )
+from dialectical_chess.suppression import suppressing_defeaters
 from dialectical_chess.static_prior import squash, static_prior
 from dialectical_chess.tuning import (
     OPINION_EVIDENCE_UNITS_PER_STRENGTH,
@@ -108,19 +110,17 @@ def build_argumentation_artifacts(
         ]
         effective_objections: list[ArgumentEvidence] = []
         objection_strength = 0
-        material_safety_prior_penalty = 0
         for objection in objection_items:
             residual = effective_objection_strength(probe, objection)
             if residual <= 0:
                 continue
             objection_strength += residual
-            material_safety_prior_penalty += material_safety_prior_penalty_for(
-                probe, objection
-            )
             effective_objections.append(objection)
-        intrinsic[move] = Opinion.vacuous(
-            squash(static_prior(probe) - material_safety_prior_penalty)
-        )
+        # The move-node base rate is the disjoint static prior only — no
+        # chess-specific penalty is folded in. Chess's material-safety loss is
+        # now an honest FACT-tier decision term (``suppression.fact_material_
+        # loss``), consulted by the decider, not smuggled into this base rate.
+        intrinsic[move] = Opinion.vacuous(squash(static_prior(probe)))
         if objection_strength > 0:
             objection_arg = objection_argument_id(probe.uci)
             arguments.add(objection_arg)
@@ -161,6 +161,15 @@ def effective_objection_strength(
     probe: MoveProbe,
     objection: ArgumentEvidence,
 ) -> int:
+    """Return an objection's strength after chess-policy suppression.
+
+    The generic residual-suppression rule (design v2 §1e): an objection's
+    strength is cancelled, at aggregation time, by the suppression strength of
+    every defeater the chess :mod:`~dialectical_chess.suppression` policy
+    returns for it. This function reads only generic strengths — the chess
+    suppression knowledge lives entirely behind the ``suppressing_defeaters``
+    hook (design D3).
+    """
     strength = 0
     if isinstance(objection, ObjectionEvidence):
         strength = objection.objection_strength
@@ -170,145 +179,18 @@ def effective_objection_strength(
         return 0
     suppression = sum(
         defeater_strength_value(defeater)
-        for defeater in objection_defeater_evidence(probe, objection)
+        for defeater in suppressing_defeaters(probe, objection)
     )
     return max(0, strength - suppression)
 
 
 def defeater_strength_value(evidence: ArgumentEvidence) -> int:
+    """Return the suppression strength a defeater / defended reply carries."""
     if isinstance(evidence, DefeaterEvidence):
         return evidence.defeater_strength
     if isinstance(evidence, ReplyEvidence):
         return evidence.defense_strength
     return 0
-
-
-def objection_defeater_evidence(
-    probe: MoveProbe,
-    objection: ArgumentEvidence,
-) -> tuple[ArgumentEvidence, ...]:
-    defeaters: list[ArgumentEvidence] = []
-    if isinstance(objection, ReplyEvidence):
-        if objection.defense_strength > 0:
-            defeaters.append(objection)
-        return tuple(defeaters)
-    if not isinstance(objection, ObjectionEvidence):
-        return tuple(defeaters)
-    if (
-        objection.objection_kind == ObjectionKind.QUEEN_BLUNDER
-        and has_compensating_forcing_pressure(probe)
-    ):
-        defeaters.append(synthetic_defeater_evidence(DefeaterKind.COMPENSATING_FORCING_PRESSURE))
-    if (
-        objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
-        and objection.moved_piece_en_pris_value is not None
-        and objection.moved_piece_en_pris_value >= 300
-    ):
-        if has_compensating_tactical_pressure(probe):
-            defeaters.append(synthetic_defeater_evidence(DefeaterKind.COMPENSATING_TACTICAL_PRESSURE))
-        if has_forcing_material_gain(probe):
-            defeaters.append(synthetic_defeater_evidence(DefeaterKind.FORCING_MATERIAL_GAIN))
-    if (
-        objection.objection_kind == ObjectionKind.OPENING_PREMATURE_MINOR_CHECK
-        and has_typed_reason_defeater(probe, DefeaterKind.SEARCH_SUPPORT)
-    ):
-        defeaters.append(synthetic_defeater_evidence(DefeaterKind.SEARCH_SUPPORT))
-    if (
-        objection.objection_kind
-        in {
-            ObjectionKind.FLANK_PAWN_WEAKENING,
-            ObjectionKind.FLANK_PAWN_LUNGE,
-        }
-        and has_typed_reason_defeater(probe, DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE)
-    ):
-        defeaters.append(synthetic_defeater_evidence(DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE))
-    return tuple(defeaters)
-
-
-def synthetic_defeater_evidence(defeater_kind: DefeaterKind) -> ArgumentEvidence:
-    return make_defeater_evidence(
-        f"defeater:{defeater_kind.value}",
-        world=EvidenceWorld.PROCEDURAL,
-        defeater_kind=defeater_kind,
-        defeater_strength=defeater_strength_for(defeater_kind),
-    )
-
-
-def defeater_strength_for(defeater_kind: DefeaterKind) -> int:
-    match defeater_kind:
-        case DefeaterKind.SEARCH_SUPPORT:
-            return 97
-        case (
-            DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE
-            | DefeaterKind.COMPENSATING_FORCING_PRESSURE
-            | DefeaterKind.FORCING_MATERIAL_GAIN
-        ):
-            return 33
-        case DefeaterKind.COMPENSATING_TACTICAL_PRESSURE:
-            return 17
-
-
-def has_compensating_tactical_pressure(probe: MoveProbe) -> bool:
-    return any(
-        isinstance(evidence, SupportEvidence | DefeaterEvidence)
-        and evidence.tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD
-        for evidence in probe.reason_evidence
-    )
-
-
-def has_compensating_forcing_pressure(probe: MoveProbe) -> bool:
-    return has_compensating_tactical_pressure(probe) and (
-        probe.gives_check or material_or_promotion_gain(probe) > 0
-    )
-
-
-def has_forcing_material_gain(probe: MoveProbe) -> bool:
-    return probe.gives_check and material_or_promotion_gain(probe) > 0
-
-
-def has_typed_reason_defeater(probe: MoveProbe, defeater_kind: DefeaterKind) -> bool:
-    return any(
-        isinstance(evidence, DefeaterEvidence) and evidence.defeater_kind == defeater_kind
-        for evidence in probe.reason_evidence
-    )
-
-
-def material_or_promotion_gain(probe: MoveProbe) -> int:
-    return probe.captured_value + probe.promotion_value
-
-
-def material_safety_prior_penalty_for(
-    probe: MoveProbe,
-    objection: ArgumentEvidence,
-) -> int:
-    if not isinstance(objection, ObjectionEvidence):
-        return 0
-    if objection.objection_kind == ObjectionKind.QUEEN_FLANK_INVASION:
-        if has_development_reason(probe) and not has_search_refutation_at_most(
-            probe.objection_evidence, -300
-        ):
-            return 0
-        return 300
-    if (
-        objection.objection_kind == ObjectionKind.MOVED_PIECE_EN_PRIS
-        and objection.moved_piece_en_pris_value is not None
-        and has_search_refutation_at_most(probe.objection_evidence, -400)
-    ):
-        return 4 * objection.moved_piece_en_pris_value
-    if (
-        objection.objection_kind == ObjectionKind.IGNORED_HANGING_PIECE
-        and has_search_refutation_at_most(probe.objection_evidence, -400)
-    ):
-        return 300
-    return 0
-
-
-def has_development_reason(probe: MoveProbe) -> bool:
-    return any(
-        isinstance(evidence, SupportEvidence | DefeaterEvidence)
-        and evidence.support_kind == SupportKind.DEVELOPMENT
-        for evidence in probe.reason_evidence
-    )
 
 
 def move_argument_id(uci: str) -> str:
