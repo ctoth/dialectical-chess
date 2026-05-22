@@ -50,7 +50,7 @@ class FakeEngine:
 
 
 def test_run_epd_reports_crashed_position_as_errored_not_failed(monkeypatch, tmp_path) -> None:
-    import dialectical_chess.bench as bench
+    import dialectical_chess.bench_epd as bench_epd
 
     epd = tmp_path / "suite.epd"
     epd.write_text(
@@ -66,9 +66,9 @@ def test_run_epd_reports_crashed_position_as_errored_not_failed(monkeypatch, tmp
         return {"correct": True, "avoided": None, "selected_uci": "a1a8"}
 
     calls = []
-    monkeypatch.setattr(bench, "score_board", score_or_crash)
+    monkeypatch.setattr(bench_epd, "score_board", score_or_crash)
 
-    payload = bench.run_epd(bench_args(epd=epd))
+    payload = bench_epd.run_epd(bench_args(epd=epd))
 
     assert not payload["ok"]
     assert payload["total"] == 2
@@ -80,22 +80,24 @@ def test_run_epd_reports_crashed_position_as_errored_not_failed(monkeypatch, tmp
 
 
 def test_score_board_excludes_avoid_rate_when_suite_has_no_am(monkeypatch) -> None:
-    import dialectical_chess.bench as bench
+    import dialectical_chess.scoring as scoring
 
-    monkeypatch.setattr(bench, "DialecticalChessEngine", FakeEngine)
+    monkeypatch.setattr(scoring, "DialecticalChessEngine", FakeEngine)
 
-    result = bench.score_board(chess.Board(), {"a1a8"}, bench_args())
+    result = scoring.score_board(chess.Board(), {"a1a8"}, bench_args())
 
     assert result["correct"] is True
     assert result["avoided"] is None
 
 
 def test_score_board_requires_bm_and_am_when_both_present(monkeypatch) -> None:
-    import dialectical_chess.bench as bench
+    import dialectical_chess.scoring as scoring
 
-    monkeypatch.setattr(bench, "DialecticalChessEngine", FakeEngine)
+    monkeypatch.setattr(scoring, "DialecticalChessEngine", FakeEngine)
 
-    result = bench.score_board(chess.Board(), {"a1a8"}, bench_args(), avoid_uci={"a1a8"})
+    result = scoring.score_board(
+        chess.Board(), {"a1a8"}, bench_args(), avoid_uci={"a1a8"}
+    )
 
     assert result["correct"] is False
     assert result["avoided"] is False

@@ -75,7 +75,7 @@ def test_critical_clock_disables_expensive_dialectical_evidence() -> None:
 
 
 def test_epd_parses_best_and_avoid_moves() -> None:
-    from dialectical_chess.bench import parse_epd_case
+    from dialectical_chess.epd import parse_epd_case
 
     case = parse_epd_case(
         '7k/6pp/8/8/8/8/6PP/R5K1 w - - bm Ra8#; am h2h3; id "smoke";',

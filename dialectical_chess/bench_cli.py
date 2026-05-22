@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from dialectical_chess.bench import main
+from dialectical_chess.bench_epd import main
 
 
 if __name__ == "__main__":

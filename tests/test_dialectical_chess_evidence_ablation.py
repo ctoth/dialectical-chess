@@ -10,15 +10,14 @@ from hypothesis import strategies as st
 
 FIXTURES = Path(__file__).resolve().parents[1] / "dialectical_chess" / "fixtures"
 
-from dialectical_chess.bench import (  # noqa: E402
+from dialectical_chess.bench_lichess import (  # noqa: E402
     dialectic_depth_for_lichess_row,
     mate_theme_depth,
     run_lichess,
-    run_experiment_matrix,
     run_tactical_witness_comparison,
-    settings as bench_settings,
     summarize_lichess_rows,
 )
+from dialectical_chess.bench_matrix import run_experiment_matrix  # noqa: E402
 from dialectical_chess.evidence import (  # noqa: E402
     is_argument_positional_reason,
     is_report_positional_reason,
@@ -34,6 +33,7 @@ from dialectical_chess.search import (  # noqa: E402
     owned_is_checkmate,
 )
 from dialectical_chess.smt import smt_fork_moves, smt_mate_in_one_moves  # noqa: E402
+from dialectical_chess.scoring import settings as bench_settings  # noqa: E402
 from dialectical_chess.uci import parse_uci_position_state  # noqa: E402
 
 
@@ -1802,7 +1802,7 @@ def test_experiment_matrix_runs_named_lichess_cases() -> None:
 
 
 def test_core_experiment_matrix_includes_no_fork_rows() -> None:
-    from dialectical_chess.bench import experiment_matrix_cases
+    from dialectical_chess.bench_matrix import experiment_matrix_cases
 
     names = {case["name"] for case in experiment_matrix_cases("core")}
 

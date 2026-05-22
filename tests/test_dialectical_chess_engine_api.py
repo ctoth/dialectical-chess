@@ -105,7 +105,7 @@ def test_uci_no_legal_move_position_survives_and_returns_null_move() -> None:
 
 
 def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
-    import dialectical_chess.bench as bench
+    import dialectical_chess.scoring as scoring
     from dialectical_chess.arguments import MoveProbe
     from dialectical_chess.engine import EngineDecision
 
@@ -128,7 +128,7 @@ def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
             )
             return EngineDecision(move_uci="a1a8", selected=selected)
 
-    monkeypatch.setattr(bench, "DialecticalChessEngine", FakeEngine)
+    monkeypatch.setattr(scoring, "DialecticalChessEngine", FakeEngine)
 
     args = Namespace(
         dialectic_depth=1,
@@ -138,7 +138,7 @@ def test_benchmark_adapter_scores_through_engine(monkeypatch) -> None:
         positional_reasons=True,
     )
 
-    result = bench.score_board(chess.Board(), {"a1a8"}, args)
+    result = scoring.score_board(chess.Board(), {"a1a8"}, args)
 
     assert result["selected_uci"] == "a1a8"
     assert result["reasons"] == ["fake:engine"]
