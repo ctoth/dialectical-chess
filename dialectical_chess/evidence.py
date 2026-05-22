@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TypeAlias
 
 
 class EvidenceWorld(str, Enum):
@@ -52,26 +53,231 @@ class DefeaterKind(str, Enum):
     ADVANCED_FLANK_PAWN_RESPONSE = "advanced_flank_pawn_response"
 
 
+class EvidenceRole(str, Enum):
+    SUPPORT = "support"
+    OBJECTION = "objection"
+    DEFEATER = "defeater"
+    REPLY = "reply"
+
+
 @dataclass(frozen=True)
-class ArgumentEvidence:
+class SupportEvidence:
     label: str
     world: EvidenceWorld
-    supports_argument: bool
     counts_as_positional: bool
     counts_as_tactical: bool
     argument_value: str = "procedural"
     support_strength: int = 0
+    tactical_threat_value: int = 0
+    defended_piece_value: int | None = None
+    search_support_score: int | None = None
+    role: EvidenceRole = EvidenceRole.SUPPORT
+
+    @property
+    def supports_argument(self) -> bool:
+        return self.support_strength > 0
+
+    @property
+    def objection_kind(self) -> ObjectionKind:
+        return ObjectionKind.NONE
+
+    @property
+    def objection_strength(self) -> int:
+        return 0
+
+    @property
+    def reply_attack_strength(self) -> int:
+        return 0
+
+    @property
+    def defense_strength(self) -> int:
+        return 0
+
+    @property
+    def defeater_kind(self) -> DefeaterKind | None:
+        return None
+
+    @property
+    def defeater_strength(self) -> int:
+        return 0
+
+    @property
+    def moved_piece_en_pris_value(self) -> int | None:
+        return None
+
+    @property
+    def search_refutation_score(self) -> int | None:
+        return None
+
+
+@dataclass(frozen=True)
+class ObjectionEvidence:
+    label: str
+    world: EvidenceWorld
     objection_kind: ObjectionKind = ObjectionKind.NONE
     objection_strength: int = 0
+    moved_piece_en_pris_value: int | None = None
+    search_refutation_score: int | None = None
+    argument_value: str = "procedural"
+    role: EvidenceRole = EvidenceRole.OBJECTION
+
+    @property
+    def supports_argument(self) -> bool:
+        return False
+
+    @property
+    def counts_as_positional(self) -> bool:
+        return False
+
+    @property
+    def counts_as_tactical(self) -> bool:
+        return False
+
+    @property
+    def support_strength(self) -> int:
+        return 0
+
+    @property
+    def reply_attack_strength(self) -> int:
+        return 0
+
+    @property
+    def defense_strength(self) -> int:
+        return 0
+
+    @property
+    def defeater_kind(self) -> DefeaterKind | None:
+        return None
+
+    @property
+    def defeater_strength(self) -> int:
+        return 0
+
+    @property
+    def defended_piece_value(self) -> int | None:
+        return None
+
+    @property
+    def tactical_threat_value(self) -> int:
+        return 0
+
+    @property
+    def search_support_score(self) -> int | None:
+        return None
+
+
+@dataclass(frozen=True)
+class DefeaterEvidence:
+    label: str
+    world: EvidenceWorld
+    defeater_kind: DefeaterKind
+    defeater_strength: int
+    counts_as_positional: bool = False
+    counts_as_tactical: bool = False
+    argument_value: str = "procedural"
+    support_strength: int = 0
+    tactical_threat_value: int = 0
+    search_support_score: int | None = None
+    role: EvidenceRole = EvidenceRole.DEFEATER
+
+    @property
+    def supports_argument(self) -> bool:
+        return self.support_strength > 0
+
+    @property
+    def objection_kind(self) -> ObjectionKind:
+        return ObjectionKind.NONE
+
+    @property
+    def objection_strength(self) -> int:
+        return 0
+
+    @property
+    def reply_attack_strength(self) -> int:
+        return 0
+
+    @property
+    def defense_strength(self) -> int:
+        return 0
+
+    @property
+    def defended_piece_value(self) -> int | None:
+        return None
+
+    @property
+    def moved_piece_en_pris_value(self) -> int | None:
+        return None
+
+    @property
+    def search_refutation_score(self) -> int | None:
+        return None
+
+
+@dataclass(frozen=True)
+class ReplyEvidence:
+    label: str
+    world: EvidenceWorld
     reply_attack_strength: int = 0
     defense_strength: int = 0
-    defeater_kind: DefeaterKind | None = None
-    defeater_strength: int = 0
-    defended_piece_value: int | None = None
-    moved_piece_en_pris_value: int | None = None
-    tactical_threat_value: int = 0
-    search_refutation_score: int | None = None
-    search_support_score: int | None = None
+    argument_value: str = "reply_refutation"
+    role: EvidenceRole = EvidenceRole.REPLY
+
+    @property
+    def supports_argument(self) -> bool:
+        return False
+
+    @property
+    def counts_as_positional(self) -> bool:
+        return False
+
+    @property
+    def counts_as_tactical(self) -> bool:
+        return False
+
+    @property
+    def support_strength(self) -> int:
+        return 0
+
+    @property
+    def objection_kind(self) -> ObjectionKind:
+        return ObjectionKind.NONE
+
+    @property
+    def objection_strength(self) -> int:
+        return 0
+
+    @property
+    def defeater_kind(self) -> DefeaterKind | None:
+        return None
+
+    @property
+    def defeater_strength(self) -> int:
+        return 0
+
+    @property
+    def defended_piece_value(self) -> int | None:
+        return None
+
+    @property
+    def moved_piece_en_pris_value(self) -> int | None:
+        return None
+
+    @property
+    def tactical_threat_value(self) -> int:
+        return 0
+
+    @property
+    def search_refutation_score(self) -> int | None:
+        return None
+
+    @property
+    def search_support_score(self) -> int | None:
+        return None
+
+
+ArgumentEvidence: TypeAlias = (
+    SupportEvidence | ObjectionEvidence | DefeaterEvidence | ReplyEvidence
+)
 
 
 ARGUMENT_POSITIONAL_REASON_PREFIXES = (
@@ -115,24 +321,49 @@ def to_argument_evidence(label: str) -> ArgumentEvidence:
     positional = is_argument_positional_reason(label)
     tactical = is_tactical_reason(label)
     supports_argument = objection_kind == ObjectionKind.NONE and (positional or tactical)
-    return ArgumentEvidence(
+    argument_value = argument_value_for(label, world, objection_kind, defeater_kind)
+    if label.startswith("reply_") or label.startswith("reply_mate:"):
+        return ReplyEvidence(
+            label=label,
+            world=world,
+            reply_attack_strength=reply_attack_strength(label),
+            defense_strength=defense_strength(label),
+            argument_value=argument_value,
+        )
+    if objection_kind != ObjectionKind.NONE:
+        return ObjectionEvidence(
+            label=label,
+            world=world,
+            objection_kind=objection_kind,
+            objection_strength=objection_strength(
+                label, objection_kind, search_refutation, moved_piece_value
+            ),
+            moved_piece_en_pris_value=moved_piece_value,
+            search_refutation_score=search_refutation,
+            argument_value=argument_value,
+        )
+    if defeater_kind is not None:
+        return DefeaterEvidence(
+            label=label,
+            world=world,
+            defeater_kind=defeater_kind,
+            defeater_strength=defeater_strength(defeater_kind),
+            counts_as_positional=positional,
+            counts_as_tactical=tactical,
+            argument_value=argument_value,
+            support_strength=support_strength(label, world, supports_argument),
+            tactical_threat_value=tactical_threat_value(label),
+            search_support_score=search_support_score(label),
+        )
+    return SupportEvidence(
         label=label,
         world=world,
-        supports_argument=supports_argument,
         counts_as_positional=positional,
         counts_as_tactical=tactical,
-        argument_value=argument_value_for(label, world, objection_kind, defeater_kind),
+        argument_value=argument_value,
         support_strength=support_strength(label, world, supports_argument),
-        objection_kind=objection_kind,
-        objection_strength=objection_strength(label, objection_kind, search_refutation, moved_piece_value),
-        reply_attack_strength=reply_attack_strength(label),
-        defense_strength=defense_strength(label),
-        defeater_kind=defeater_kind,
-        defeater_strength=0 if defeater_kind is None else defeater_strength(defeater_kind),
         defended_piece_value=defended_value,
-        moved_piece_en_pris_value=moved_piece_value,
         tactical_threat_value=tactical_threat_value(label),
-        search_refutation_score=search_refutation,
         search_support_score=search_support_score(label),
     )
 
