@@ -1,11 +1,21 @@
 """Opinion-valued argumentation artifacts — the generic graph builder.
 
 This is the generic, game-agnostic half of the cartridge seam. It builds a
-``doxa.BipolarOpinionGraph`` and a Dung filter framework from typed evidence,
-reading only the generic discriminants — a piece of evidence's role
-(support / objection / defeater / reply) and its strength. It never names a
-chess objection kind: the chess-specific suppression policy lives behind the
-``suppression`` hook (design D3).
+``doxa.BipolarOpinionGraph`` and a Dung filter framework from a list of
+generic :class:`~dialectical_chess.move_argument.MoveArgument` values, reading
+only game-agnostic discriminants:
+
+* a piece of evidence's :class:`~dialectical_chess.move_argument.Role`
+  (support / objection) and its aggregate ``strength``;
+* a piece of evidence's :class:`~dialectical_chess.scheme.Tier` — the crisp
+  filter framework is built from objections whose ``tier`` is ``Tier.FACT``;
+* a move's precomputed ``prior`` base rate.
+
+It imports nothing chess-specific — no ``chess`` board, no chess ``MoveProbe``,
+no chess objection kind, no chess policy module. Every chess-specific input is
+computed cartridge-side (see :mod:`~dialectical_chess.argumentation_cartridge`)
+and handed in as one of those generic typed values. This module is therefore
+extractable as-is into a game-agnostic ``dialectical-games`` core.
 """
 
 from __future__ import annotations
@@ -16,17 +26,8 @@ from argumentation.dung import ArgumentationFramework
 from doxa import Opinion
 from doxa.argumentation import BipolarOpinionGraph
 
-from dialectical_chess.arguments import MoveProbe
-from dialectical_chess.evidence import (
-    ArgumentEvidence,
-    DefeaterEvidence,
-    ObjectionEvidence,
-    ReplyEvidence,
-    SupportEvidence,
-    is_forced_mate_refutation,
-)
-from dialectical_chess.suppression import suppressing_defeaters
-from dialectical_chess.static_prior import squash, static_prior
+from dialectical_chess.move_argument import Evidence, MoveArgument, Role
+from dialectical_chess.scheme import Tier
 from dialectical_chess.tuning import (
     OPINION_EVIDENCE_UNITS_PER_STRENGTH,
     OPINION_LEAF_BASE_RATE,
@@ -51,7 +52,7 @@ class MoveArgumentationArtifacts:
 
     graph: BipolarMoveGraph
     filter_af: ArgumentationFramework
-    evidence_trace: dict[str, list[ArgumentEvidence]]
+    evidence_trace: dict[str, list[Evidence]]
 
     @property
     def move_arg(self) -> dict[str, str]:
@@ -67,9 +68,18 @@ def leaf_intrinsic(strength: int) -> Opinion:
 
 
 def build_argumentation_artifacts(
-    probes: list[MoveProbe],
+    move_arguments: list[MoveArgument],
 ) -> MoveArgumentationArtifacts:
-    """Build the opinion graph, move index, filter AF, and evidence trace."""
+    """Build the opinion graph, move index, filter AF, and evidence trace.
+
+    Consumes a list of generic :class:`MoveArgument` values. For each move it
+    builds, in the bipolar opinion graph: a vacuous move node at the move's
+    precomputed ``prior``, an aggregate support leaf (when the move carries
+    positive-strength support), and an aggregate objection leaf (when the move
+    carries positive-strength objections). In the separate Dung filter
+    framework it adds one defeater argument per ``Tier.FACT`` refuting
+    objection — the crisp hard gate keys on :class:`~dialectical_chess.scheme.Tier`.
+    """
     arguments: set[str] = set()
     intrinsic: dict[str, Opinion] = {}
     supports: set[tuple[str, str]] = set()
@@ -78,25 +88,23 @@ def build_argumentation_artifacts(
     move_arg: dict[str, str] = {}
     filter_arguments: set[str] = set()
     filter_defeats: set[tuple[str, str]] = set()
-    evidence_trace: dict[str, list[ArgumentEvidence]] = {}
+    evidence_trace: dict[str, list[Evidence]] = {}
     edge_trust = Opinion.dogmatic_true(EDGE_TRUST_BASE_RATE)
 
-    for probe in probes:
-        move = move_argument_id(probe.uci)
-        move_arg[probe.uci] = move
+    for argument in move_arguments:
+        move = move_argument_id(argument.move_id)
+        move_arg[argument.move_id] = move
         arguments.add(move)
         filter_arguments.add(move)
 
         support_items = [
             evidence
-            for evidence in probe.reason_evidence
-            if isinstance(evidence, SupportEvidence | DefeaterEvidence)
-            and evidence.supports_argument
-            and evidence.support_strength > 0
+            for evidence in argument.supports
+            if evidence.role is Role.SUPPORT and evidence.strength > 0
         ]
-        support_strength = sum(evidence.support_strength for evidence in support_items)
+        support_strength = sum(evidence.strength for evidence in support_items)
         if support_strength > 0:
-            support = support_argument_id(probe.uci)
+            support = support_argument_id(argument.move_id)
             arguments.add(support)
             intrinsic[support] = leaf_intrinsic(support_strength)
             edge = (support, move)
@@ -105,35 +113,27 @@ def build_argumentation_artifacts(
             evidence_trace[support] = list(support_items)
 
         objection_items = [
-            *probe.objection_evidence,
-            *probe.reply_attack_evidence,
+            evidence
+            for evidence in argument.objections
+            if evidence.role is Role.OBJECTION and evidence.strength > 0
         ]
-        effective_objections: list[ArgumentEvidence] = []
-        objection_strength = 0
-        for objection in objection_items:
-            residual = effective_objection_strength(probe, objection)
-            if residual <= 0:
-                continue
-            objection_strength += residual
-            effective_objections.append(objection)
-        # The move-node base rate is the disjoint static prior only — no
-        # chess-specific penalty is folded in. Chess's material-safety loss is
-        # now an honest FACT-tier decision term (``suppression.fact_material_
-        # loss``), consulted by the decider, not smuggled into this base rate.
-        intrinsic[move] = Opinion.vacuous(squash(static_prior(probe)))
+        objection_strength = sum(evidence.strength for evidence in objection_items)
+        # The move-node base rate is the precomputed disjoint prior only — no
+        # game policy is folded in here. The cartridge has already classified
+        # any proven material loss as a FACT-tier decision term carried on the
+        # MoveArgument, not as a base-rate nudge.
+        intrinsic[move] = Opinion.vacuous(argument.prior)
         if objection_strength > 0:
-            objection_arg = objection_argument_id(probe.uci)
+            objection_arg = objection_argument_id(argument.move_id)
             arguments.add(objection_arg)
             intrinsic[objection_arg] = leaf_intrinsic(objection_strength)
             edge = (objection_arg, move)
             attacks.add(edge)
             edge_opinions[edge] = edge_trust
-            evidence_trace[objection_arg] = effective_objections
+            evidence_trace[objection_arg] = objection_items
 
-        for evidence in objection_items:
-            if not is_forced_mate_refutation(evidence):
-                continue
-            refute = refutation_argument_id(probe.uci, evidence)
+        for evidence in argument.crisp_refutations:
+            refute = refutation_argument_id(argument.move_id, evidence)
             filter_arguments.add(refute)
             filter_defeats.add((refute, move))
             evidence_trace[refute] = [evidence]
@@ -157,53 +157,29 @@ def build_argumentation_artifacts(
     )
 
 
-def effective_objection_strength(
-    probe: MoveProbe,
-    objection: ArgumentEvidence,
-) -> int:
-    """Return an objection's strength after chess-policy suppression.
+def move_argument_id(move_id: str) -> str:
+    return f"move:{move_id}"
 
-    The generic residual-suppression rule (design v2 §1e): an objection's
-    strength is cancelled, at aggregation time, by the suppression strength of
-    every defeater the chess :mod:`~dialectical_chess.suppression` policy
-    returns for it. This function reads only generic strengths — the chess
-    suppression knowledge lives entirely behind the ``suppressing_defeaters``
-    hook (design D3).
-    """
-    strength = 0
-    if isinstance(objection, ObjectionEvidence):
-        strength = objection.objection_strength
-    elif isinstance(objection, ReplyEvidence):
-        strength = objection.reply_attack_strength
-    if strength <= 0:
-        return 0
-    suppression = sum(
-        defeater_strength_value(defeater)
-        for defeater in suppressing_defeaters(probe, objection)
+
+def support_argument_id(move_id: str) -> str:
+    return f"support:{move_id}"
+
+
+def objection_argument_id(move_id: str) -> str:
+    return f"objection:{move_id}"
+
+
+def refutation_argument_id(move_id: str, evidence: Evidence) -> str:
+    return f"refute:{move_id}:{evidence.label}"
+
+
+# A FACT objection that hard-defeats a move in the crisp filter — the generic
+# Tier-keyed crisp gate. Kept as a named predicate so the decider and tests
+# can ask "is this a refuting FACT objection" without re-spelling the rule.
+def is_crisp_refutation(evidence: Evidence) -> bool:
+    """Return whether ``evidence`` hard-defeats its move in the crisp filter."""
+    return (
+        evidence.role is Role.OBJECTION
+        and evidence.tier is Tier.FACT
+        and evidence.refutes
     )
-    return max(0, strength - suppression)
-
-
-def defeater_strength_value(evidence: ArgumentEvidence) -> int:
-    """Return the suppression strength a defeater / defended reply carries."""
-    if isinstance(evidence, DefeaterEvidence):
-        return evidence.defeater_strength
-    if isinstance(evidence, ReplyEvidence):
-        return evidence.defense_strength
-    return 0
-
-
-def move_argument_id(uci: str) -> str:
-    return f"move:{uci}"
-
-
-def support_argument_id(uci: str) -> str:
-    return f"support:{uci}"
-
-
-def objection_argument_id(uci: str) -> str:
-    return f"objection:{uci}"
-
-
-def refutation_argument_id(uci: str, evidence: ArgumentEvidence) -> str:
-    return f"refute:{uci}:{evidence.label}"

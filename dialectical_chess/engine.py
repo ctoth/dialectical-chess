@@ -79,7 +79,11 @@ class DialecticalChessEngine:
                 deadline=self.settings.deadline,
             )
         )
-        selected = choose_move(probes) if probes else None
+        selected = (
+            choose_move(probes, deadline=self.settings.deadline)
+            if probes
+            else None
+        )
         if uses_selected_reply_mate_refutation(self.settings):
             probes, selected = selected_reply_mate_refutation_fixpoint(
                 board,
@@ -134,7 +138,7 @@ def selected_reply_mate_refutation_fixpoint(
             else probe
             for probe in probes
         ]
-        selected = choose_move(probes) if probes else None
+        selected = choose_move(probes, deadline=deadline) if probes else None
     return probes, selected
 
 

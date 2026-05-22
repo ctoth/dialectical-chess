@@ -235,7 +235,15 @@ def test_critical_clock_profile_rejects_selected_forced_mate() -> None:
 def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(monkeypatch) -> None:
     """M4 restored behaviour test (ported to parse_go / settings_for_go_request):
     in a wide position the critical-clock profile must NOT run an unbounded
-    forced-mate proof, and the engine must still return a non-null move."""
+    forced-mate proof, and the engine must still return a non-null move.
+
+    The forced-mate proof can be reached through two modules: the reply-mate
+    fixpoint in ``dialectical_chess.engine``, and the slowest-loss scan in the
+    Phase-1 cartridge ``dialectical_chess.argumentation_cartridge`` (which has
+    its own ``has_forced_mate`` import binding). The guard patches BOTH so a
+    proof on either path fails fast — patching only one would silently no-op
+    against a call routed through the other."""
+    from dialectical_chess import argumentation_cartridge as cartridge_module
     from dialectical_chess import engine as engine_module
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
@@ -249,6 +257,9 @@ def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(mo
         )
 
     monkeypatch.setattr(engine_module, "has_forced_mate", reject_unbounded_mate_search)
+    monkeypatch.setattr(
+        cartridge_module, "has_forced_mate", reject_unbounded_mate_search
+    )
     board = owned_board_from_fen("1rb1kr2/pp1p2pp/2nQ2n1/b5B1/5p2/2P2N2/PPK2P1P/R4B1R b - - 3 25")
     request = parse_go("go btime 1500 wtime 30000 binc 100 winc 100".split())
     settings, budget_ms = settings_for_go_request(

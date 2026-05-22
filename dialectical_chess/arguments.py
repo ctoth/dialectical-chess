@@ -30,10 +30,14 @@ class MoveProbe:
     reply_attack_evidence: tuple[ArgumentEvidence, ...] = ()
 
 
-def choose_move(probes: list[MoveProbe]) -> MoveProbe:
-    from dialectical_chess.decide import choose_move_argumentation
+def choose_move(
+    probes: list[MoveProbe],
+    *,
+    deadline: float | None = None,
+) -> MoveProbe:
+    from dialectical_chess.argumentation_cartridge import choose_move_argumentation
 
-    decision = choose_move_argumentation(probes)
+    decision = choose_move_argumentation(probes, deadline=deadline)
     return decision.selected
 
 
