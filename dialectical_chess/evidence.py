@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable, TypeAlias
 
-from dialectical_chess.scheme import Tier
+from dialectical_games.scheme import Tier
 from dialectical_chess.tuning import (
     COMPENSATING_TACTICAL_THREAT_THRESHOLD,
     LARGE_SEARCH_REFUTATION_THRESHOLD,

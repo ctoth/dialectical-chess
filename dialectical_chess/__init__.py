@@ -1,9 +1,12 @@
-"""Reusable modules for the dialectical chess sidecar scripts."""
+"""Reusable modules for the dialectical chess sidecar scripts.
 
-from dialectical_chess.argumentation_cartridge import (
-    ArgumentationDecision,
-    choose_move_argumentation,
-)
+Core Phase 3 chunk B intermediate (delete-first): the legacy
+``argumentation_cartridge`` re-exports have been removed. Chunk E rebuilds
+this surface against ``dialectical_games`` (re-exporting ``EngineAnalysis``,
+``EngineDecision``, ``EngineSettings`` from the core, with a chess
+cartridge ``EngineDecision.move_uci`` alias).
+"""
+
 from dialectical_chess.engine import (
     DialecticalChessEngine,
     EngineAnalysis,
@@ -12,10 +15,8 @@ from dialectical_chess.engine import (
 )
 
 __all__ = [
-    "ArgumentationDecision",
     "DialecticalChessEngine",
     "EngineAnalysis",
     "EngineDecision",
     "EngineSettings",
-    "choose_move_argumentation",
 ]
