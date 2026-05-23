@@ -8,6 +8,7 @@ from typing import Any
 
 from dialectical_chess.arguments import MoveProbe
 from dialectical_chess.board import OwnedBoard
+from dialectical_chess.core_labels import core_labels_for_probe
 from dialectical_chess.evidence import (
     ArgumentEvidence,
     DefeaterKind,
@@ -55,6 +56,7 @@ from dialectical_chess.search import (
     root_search_result,
 )
 from dialectical_chess.smt import SmtSettings, smt_fork_witnesses, smt_mate_in_one_moves
+from dialectical_chess.static_prior import squash, static_prior
 from dialectical_chess.tuning import (
     CHECKMATE_SCORE,
     CHECK_SCORE,
@@ -402,23 +404,51 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 )
             )
 
+        # Translate chess-typed evidence into core-taxonomy label strings
+        # for the inherited core MoveProbe fields the core graph builder
+        # reads. The chess-flavoured label strings stay on the chess
+        # extension fields (reason_evidence / objection_evidence /
+        # reply_attack_evidence) for chess-side reasoning.
+        core_reasons, core_objections, core_reply_attacks = core_labels_for_probe(
+            reason_evidence=tuple(reason_evidence),
+            objection_evidence=tuple(objection_evidence_items),
+            reply_attack_evidence=reply_attack_evidence,
+        )
+        # child_eval — cartridge-precomputed centipawn-scale evaluation of
+        # the post-move position. The graded policy squashes it to (0, 1).
+        # static_prior() reads probe.post_fen, which we pass on a synthetic
+        # probe just for this calculation.
+        post_fen = child.fen()
+        synthetic_for_prior = MoveProbe(
+            move_id=move.uci(),
+            uci=move.uci(),
+            post_fen=post_fen,
+        )
+        prior_centipawn = int(squash(static_prior(synthetic_for_prior)) * 1000)
+
         probes.append(
             MoveProbe(
+                # Core MoveProbe inherited fields.
+                move_id=move.uci(),
+                score=score,
+                reasons=core_reasons,
+                objections=core_objections,
+                reply_attacks=core_reply_attacks,
+                defenses=(),
+                search_score=None if search_result is None else search_result.score,
+                search_line=() if search_result is None else search_result.line,
+                child_eval=prior_centipawn,
+                contested=False,  # Chess emits no HEURISTIC labels into core this cycle.
+                # Chess-extension fields.
                 uci=move.uci(),
                 san=san,
-                score=score,
                 is_checkmate=is_checkmate,
                 gives_check=gives_check,
                 is_capture=is_capture,
                 captured_value=captured_value,
                 promotion_value=promotion_value,
-                reasons=tuple(reasons),
-                objections=tuple(objections),
-                reply_attacks=reply_attacks,
-                search_score=None if search_result is None else search_result.score,
-                search_line=() if search_result is None else search_result.line,
                 smt_witnesses=tuple(smt_witnesses),
-                post_fen=child.fen(),
+                post_fen=post_fen,
                 reason_evidence=tuple(reason_evidence),
                 objection_evidence=tuple(objection_evidence_items),
                 reply_attack_evidence=reply_attack_evidence,

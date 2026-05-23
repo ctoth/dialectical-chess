@@ -1,10 +1,15 @@
-"""Reusable modules for the dialectical chess sidecar scripts.
+"""dialectical-chess — chess cartridge over the dialectical-games core.
 
-Core Phase 3 chunk B intermediate (delete-first): the legacy
-``argumentation_cartridge`` re-exports have been removed. Chunk E rebuilds
-this surface against ``dialectical_games`` (re-exporting ``EngineAnalysis``,
-``EngineDecision``, ``EngineSettings`` from the core, with a chess
-cartridge ``EngineDecision.move_uci`` alias).
+The package surface re-exports the chess engine, settings, and decision /
+analysis carriers. The argumentation orchestration lives in
+``dialectical_games.engine.analyze``; the chess cartridge implements the
+core ``Cartridge`` Protocol via :class:`DialecticalChessEngine`.
+
+Core Phase 3: ``argumentation_cartridge`` / ``decide`` / ``opinion_graph`` /
+``scheme`` / ``move_argument`` / ``skeptical_filter`` have been deleted; the
+generic surface they implemented now lives in ``dialectical_games.*``. The
+chess ``EngineDecision`` carries a ``move_uci`` alias property for backwards
+compat with chess test sites that read ``decision.move_uci``.
 """
 
 from dialectical_chess.engine import (

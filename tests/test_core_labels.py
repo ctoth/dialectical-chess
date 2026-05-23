@@ -87,6 +87,7 @@ def test_fact_material_safety_translates_to_obj_loses_exchange(
     )
     label = core_objection_label(ev)
     assert label == f"obj:loses_exchange:{magnitude}"
+    assert label is not None
     parsed = to_argument_evidence(label)
     assert parsed.tier is CoreTier.FACT
     assert parsed.value is CoreValue.MATERIAL
@@ -112,6 +113,7 @@ def test_fact_reply_kinds_translate_to_reply_terminal_loss(
     )
     label = core_objection_label(ev)
     assert label == "reply:terminal_loss"
+    assert label is not None
     parsed = to_argument_evidence(label)
     assert parsed.tier is CoreTier.FACT
     assert parsed.value is CoreValue.WINNING
@@ -149,6 +151,7 @@ def test_search_refutation_translates_to_obj_loses_exchange(score: int) -> None:
     )
     label = core_objection_label(ev)
     assert label == f"obj:loses_exchange:{-score}"
+    assert label is not None
     parsed = to_argument_evidence(label)
     assert parsed.tier is CoreTier.FACT
     assert parsed.value is CoreValue.MATERIAL
@@ -167,6 +170,7 @@ def test_proven_reply_mate_translates_to_reply_terminal_loss(distance: int) -> N
     )
     label = core_reply_attack_label(ev)
     assert label == "reply:terminal_loss"
+    assert label is not None
     parsed = to_argument_evidence(label)
     assert parsed.tier is CoreTier.FACT
 
@@ -198,6 +202,7 @@ def test_material_capture_support_translates_to_pro_material(magnitude: int) -> 
     )
     label = core_reason_label(ev)
     assert label == f"pro:material:{magnitude}"
+    assert label is not None
     parsed = to_argument_evidence(label)
     assert parsed.tier is CoreTier.FACT
     assert parsed.value is CoreValue.MATERIAL

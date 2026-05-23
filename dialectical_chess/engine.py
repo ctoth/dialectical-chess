@@ -1,15 +1,37 @@
-"""Unified engine API for dialectical chess move decisions."""
+"""Chess cartridge: ``Cartridge`` Protocol impl + engine driver.
+
+The chess cartridge implements the core ``dialectical_games.engine.Cartridge``
+Protocol (``probe_moves`` + ``make_graded_policy``) and drives moves through
+the core orchestrator ``dialectical_games.engine.analyze``. The chess-specific
+reply-mate refutation fixpoint is encoded as a ``PostDecisionHook`` reading
+its config off ``PostDecisionContext.cartridge_settings``.
+
+Re-exports the core's ``EngineDecision`` / ``EngineAnalysis`` (the chess
+cartridge adds a one-line ``move_uci`` alias on the chess-side wrapper for
+backwards compat with 77 chess test sites).
+"""
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, cast
 
-from dialectical_chess.arguments import (
-    MoveProbe,
-    choose_move,
+from dialectical_games.arguments import (
+    MoveProbe as CoreMoveProbe,
+    build_root_argument_graph,
 )
+from dialectical_games.decider import lexicographic_decide
+from dialectical_games.engine import (
+    EngineAnalysis as CoreEngineAnalysis,
+    EngineDecision as CoreEngineDecision,
+    EngineSettings as CoreEngineSettings,
+    PostDecisionContext,
+    PostDecisionResult,
+    analyze as core_analyze,
+)
+
+from dialectical_chess.arguments import MoveProbe
 from dialectical_chess.evidence import (
     LARGE_SEARCH_REFUTATION_THRESHOLD,
     ArgumentEvidence,
@@ -19,6 +41,7 @@ from dialectical_chess.evidence import (
     has_search_refutation_at_most,
     objection_evidence,
 )
+from dialectical_chess.graded_policy import ChessGradedPolicy
 from dialectical_chess.loss_mining import has_forced_mate
 from dialectical_chess.probe import ensure_owned_board, probe_moves
 from dialectical_chess.search import ReplyAnalysisSettings
@@ -28,6 +51,13 @@ SELECTED_REPLY_MATE_LOW_CLOCK_LEGAL_LIMIT = 20
 
 @dataclass(frozen=True)
 class EngineSettings:
+    """Chess cartridge engine settings.
+
+    Carried opaquely on the core ``EngineSettings.cartridge_settings`` so the
+    chess post-decision hook can read it. Mirrors the pre-Phase-3 chess
+    EngineSettings.
+    """
+
     dialectic_depth: int = 1
     search_depth: int = 0
     search_backend: str = "negamax"
@@ -42,8 +72,20 @@ class EngineSettings:
 
 @dataclass(frozen=True)
 class EngineDecision:
+    """Chess engine decision — wraps the chosen probe.
+
+    Carries ``move_uci`` (the chess-canonical name; 77 chess test sites
+    read ``decision.move_uci``) plus a ``move_id`` alias matching the
+    core's vocabulary.
+    """
+
     move_uci: str
     selected: MoveProbe | None
+
+    @property
+    def move_id(self) -> str:
+        """Alias matching ``dialectical_games.engine.EngineDecision.move_id``."""
+        return self.move_uci
 
     @property
     def score(self) -> int | None:
@@ -52,21 +94,40 @@ class EngineDecision:
 
 @dataclass(frozen=True)
 class EngineAnalysis:
+    """Chess engine analysis — probes + decision.
+
+    Mirrors the pre-Phase-3 chess EngineAnalysis surface; drops the core
+    ``graph`` field (the core's RootArgumentGraph) which chess callers do
+    not read today. Add it back if a chess caller needs the graded layer.
+    """
+
     probes: tuple[MoveProbe, ...]
     decision: EngineDecision
 
 
 class DialecticalChessEngine:
-    """Reusable engine surface used by UCI, benchmarks, and probe adapters."""
+    """Chess engine — implements the core ``Cartridge`` Protocol.
+
+    ``probe_moves(board)`` returns chess MoveProbes (subclass of core
+    MoveProbe) populated with both core taxonomy labels (inherited fields,
+    read by the core graph builder) and chess-flavoured evidence (chess
+    extension fields, used by the chess reply-mate hook and other
+    cartridge-side diagnostics).
+
+    ``make_graded_policy(board)`` returns a fresh ``ChessGradedPolicy``
+    bound to ``board``.
+    """
 
     def __init__(self, settings: EngineSettings | None = None) -> None:
         self.settings = settings or EngineSettings()
 
-    def analyze(self, board: Any) -> EngineAnalysis:
-        board = ensure_owned_board(board)
-        probes = list(
+    # --- Cartridge Protocol ------------------------------------------------
+
+    def probe_moves(self, board: Any) -> tuple[CoreMoveProbe, ...]:
+        owned = ensure_owned_board(board)
+        return tuple(
             probe_moves(
-                board,
+                owned,
                 dialectic_depth=self.settings.dialectic_depth,
                 search_depth=self.settings.search_depth,
                 search_backend=self.settings.search_backend,
@@ -79,67 +140,117 @@ class DialecticalChessEngine:
                 deadline=self.settings.deadline,
             )
         )
-        selected = (
-            choose_move(probes, deadline=self.settings.deadline)
-            if probes
+
+    def make_graded_policy(self, board: Any) -> ChessGradedPolicy:
+        return ChessGradedPolicy(board=board)
+
+    # --- chess-facing driver -----------------------------------------------
+
+    def analyze(self, board: Any) -> EngineAnalysis:
+        owned = ensure_owned_board(board)
+        post_decision = (
+            _reply_mate_post_decision
+            if uses_selected_reply_mate_refutation(self.settings)
             else None
         )
-        if uses_selected_reply_mate_refutation(self.settings):
-            probes, selected = selected_reply_mate_refutation_fixpoint(
-                board,
-                probes,
-                selected,
-                allow_mate_four=self.settings.reply_mate_scan,
-                deadline=self.settings.deadline,
+        core_settings = CoreEngineSettings(
+            search_backend=self.settings.search_backend,
+            deadline=self.settings.deadline,
+            cartridge_settings=self.settings,
         )
-        decision = EngineDecision(
-            move_uci="0000" if selected is None else selected.uci,
-            selected=selected,
+        analysis: CoreEngineAnalysis = core_analyze(
+            owned,
+            cartridge=self,
+            settings=core_settings,
+            post_decision=post_decision,
         )
-        return EngineAnalysis(probes=tuple(probes), decision=decision)
+        selected_probe = (
+            cast(MoveProbe, analysis.decision.selected)
+            if analysis.decision.selected is not None
+            else None
+        )
+        chess_decision = EngineDecision(
+            move_uci="0000" if selected_probe is None else selected_probe.uci,
+            selected=selected_probe,
+        )
+        chess_probes = tuple(cast(MoveProbe, p) for p in analysis.probes)
+        return EngineAnalysis(probes=chess_probes, decision=chess_decision)
 
     def choose_move(self, board: Any) -> EngineDecision:
         return self.analyze(board).decision
 
 
-def selected_reply_mate_refutation_fixpoint(
-    board: Any,
-    probes: list[MoveProbe],
-    selected: MoveProbe | None,
-    *,
-    allow_mate_four: bool,
-    deadline: float | None = None,
-) -> tuple[list[MoveProbe], MoveProbe | None]:
-    move_by_uci = {move.uci(): move for move in board.legal_moves()}
-    if not allow_mate_four and len(move_by_uci) > SELECTED_REPLY_MATE_LOW_CLOCK_LEGAL_LIMIT:
-        return probes, selected
+# --- post-decision hook: reply-mate refutation fixpoint --------------------
+
+
+def _reply_mate_post_decision(
+    context: PostDecisionContext,
+    probes: tuple[CoreMoveProbe, ...],
+    selected: CoreMoveProbe | None,
+) -> PostDecisionResult:
+    """Reply-mate refutation fixpoint as a core ``PostDecisionHook``.
+
+    Walks the selected move; if a forced reply-mate refutation can be
+    proved against it, appends the refutation objection (in core
+    taxonomy: ``reply:terminal_loss``) to the chess MoveProbe and asks
+    the core decider to re-select. Iterates until either no probe is
+    selected, every selected probe has been refuted, the deadline elapses,
+    or no further refutation can be proved.
+    """
+    settings: EngineSettings = context.cartridge_settings
+    allow_mate_four = settings.reply_mate_scan
+    board = context.board
+    move_by_uci = {m.uci(): m for m in board.legal_moves()}
+    if (
+        not allow_mate_four
+        and len(move_by_uci) > SELECTED_REPLY_MATE_LOW_CLOCK_LEGAL_LIMIT
+    ):
+        return PostDecisionResult(probes=probes, selected=selected)
+
     refuted: set[str] = set()
-    while selected is not None and selected.uci not in refuted:
-        if deadline is not None and time.monotonic() >= deadline:
+    current_probes = list(probes)
+    current_selected = selected
+    while current_selected is not None:
+        chess_selected = cast(MoveProbe, current_selected)
+        if chess_selected.uci in refuted:
+            break
+        if context.deadline is not None and time.monotonic() >= context.deadline:
             break
         refutation = selected_reply_mate_refutation(
             board,
             move_by_uci,
-            selected,
-            mate_depths=selected_reply_mate_depths(selected, allow_mate_four=allow_mate_four),
-            deadline=deadline,
+            chess_selected,
+            mate_depths=selected_reply_mate_depths(
+                chess_selected, allow_mate_four=allow_mate_four
+            ),
+            deadline=context.deadline,
         )
         if refutation is None:
             break
-        refuted.add(selected.uci)
-        objection_label, objection = refutation
-        probes = [
-            replace(
-                probe,
-                objections=probe.objections + (objection_label,),
-                objection_evidence=probe.objection_evidence + (objection,),
-            )
-            if probe.uci == selected.uci and objection_label not in probe.objections
-            else probe
-            for probe in probes
-        ]
-        selected = choose_move(probes, deadline=deadline) if probes else None
-    return probes, selected
+        refuted.add(chess_selected.uci)
+        chess_label, chess_evidence = refutation
+        # Translate to a core taxonomy label so the core graph builder
+        # parses it as FACT (the chess label is chess-flavoured).
+        core_label = "reply:terminal_loss"
+        new_probes: list[CoreMoveProbe] = []
+        for probe in current_probes:
+            cp = cast(MoveProbe, probe)
+            if cp.uci == chess_selected.uci and core_label not in cp.objections:
+                new_probes.append(
+                    replace(
+                        cp,
+                        objections=cp.objections + (core_label,),
+                        objection_evidence=cp.objection_evidence + (chess_evidence,),
+                    )
+                )
+            else:
+                new_probes.append(probe)
+        current_probes = new_probes
+        current_selected = context.redecide(tuple(current_probes))
+
+    return PostDecisionResult(
+        probes=tuple(current_probes), selected=current_selected
+    )
 
 
 def selected_reply_mate_depths(

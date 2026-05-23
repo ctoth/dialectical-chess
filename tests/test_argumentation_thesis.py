@@ -52,15 +52,15 @@ from doxa import Opinion  # noqa: E402
 from doxa.argumentation import BipolarOpinionGraph, evaluate  # noqa: E402
 from argumentation.dung import ArgumentationFramework, grounded_extension  # noqa: E402
 
-from dialectical_chess.opinion_graph import (  # noqa: E402
+from dialectical_chess.opinion_graph import (  # noqa: E402  # pyright: ignore[reportMissingImports]
     A_ROLE,
     EV,
     BipolarMoveGraph,
     MoveArgumentationArtifacts,
     leaf_intrinsic,
 )
-from dialectical_chess.skeptical_filter import skeptical_survivors  # noqa: E402
-from dialectical_chess.argumentation_cartridge import (  # noqa: E402
+from dialectical_chess.skeptical_filter import skeptical_survivors  # noqa: E402  # pyright: ignore[reportMissingImports]
+from dialectical_chess.argumentation_cartridge import (  # noqa: E402  # pyright: ignore[reportMissingImports]
     ArgumentationDecision,
     build_argumentation_artifacts,
     choose_move_argumentation,

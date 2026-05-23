@@ -10,6 +10,7 @@ import chess
 
 from dialectical_chess.arguments import MoveProbe
 from dialectical_chess.board import OwnedBoard
+from dialectical_chess.core_labels import core_labels_for_probe
 from dialectical_chess.evidence import (
     ArgumentEvidence,
     EvidenceWorld,
@@ -159,10 +160,23 @@ def scan_forced_reply_mates_for_candidate_moves(
                     break
             if not forced_mate.labels:
                 continue
+            # Translate the chess-typed forced-mate evidence into core
+            # taxonomy labels and merge into the probe's inherited core
+            # ``objections`` tuple (the core graph builder reads from
+            # there). The chess-flavoured labels stay on the chess
+            # extension ``objection_evidence``.
+            extra_reasons, extra_objections, extra_reply_attacks = core_labels_for_probe(
+                reason_evidence=(),
+                objection_evidence=forced_mate.evidence,
+                reply_attack_evidence=(),
+            )
+            merged_core_objections = probe.objections + tuple(
+                label for label in extra_objections if label not in probe.objections
+            )
             updated[probe.uci] = replace(
                 probe,
                 score=probe.score + forced_mate_score,
-                objections=probe.objections + forced_mate.labels,
+                objections=merged_core_objections,
                 objection_evidence=probe.objection_evidence + forced_mate.evidence,
             )
         if not made_progress:

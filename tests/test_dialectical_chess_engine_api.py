@@ -481,13 +481,22 @@ def test_has_forced_mate_returns_best_so_far_on_expired_deadline() -> None:
 def test_reply_mate_fixpoint_bounds_single_iteration_with_deadline(monkeypatch) -> None:
     """M3 regression: the reply-mate fixpoint's heavy per-iteration call
     (selected_reply_mate_refutation -> has_forced_mate) must observe the
-    deadline. A slow has_forced_mate must not overrun an expired budget."""
+    deadline. A slow has_forced_mate must not overrun an expired budget.
+
+    Core Phase 3: the fixpoint is now a core PostDecisionHook
+    (_reply_mate_post_decision); the test invokes it via the
+    PostDecisionContext surface.
+    """
     import time
 
     from dialectical_chess import engine as engine_module
     from dialectical_chess.arguments import MoveProbe
-    from dialectical_chess.engine import selected_reply_mate_refutation_fixpoint
+    from dialectical_chess.engine import (
+        EngineSettings,
+        _reply_mate_post_decision,
+    )
     from dialectical_chess.probe import owned_board_from_fen
+    from dialectical_games.engine import PostDecisionContext
 
     board = owned_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
     selected = MoveProbe(
@@ -513,18 +522,25 @@ def test_reply_mate_fixpoint_bounds_single_iteration_with_deadline(monkeypatch) 
 
     monkeypatch.setattr(engine_module, "has_forced_mate", slow_has_forced_mate)
 
-    probes = [selected]
-    started = time.perf_counter()
-    out_probes, out_selected = selected_reply_mate_refutation_fixpoint(
-        board,
-        probes,
-        selected,
-        allow_mate_four=True,
-        deadline=time.monotonic() + 0.05,
+    settings = EngineSettings(reply_mate_scan=True)
+    deadline = time.monotonic() + 0.05
+
+    def redecide(_probes):
+        return selected
+
+    context = PostDecisionContext(
+        board=board,
+        deadline=deadline,
+        redecide=redecide,
+        cartridge_settings=settings,
     )
+
+    probes = (selected,)
+    started = time.perf_counter()
+    result = _reply_mate_post_decision(context, probes, selected)
     elapsed = time.perf_counter() - started
 
     assert elapsed < 1.0
-    assert out_selected is not None
+    assert result.selected is not None
     # The deadline reached the heavy mate call, not just the loop top.
     assert deadline_seen and all(d is not None for d in deadline_seen)
