@@ -84,6 +84,7 @@ _FIXED_OBJECTION_BY_KIND: dict[ObjectionKind, str] = {
     ObjectionKind.FLANK_PAWN_WEAKENING: "obj:king_safety:flank_pawn_weakening",
     ObjectionKind.FLANK_PAWN_LUNGE: "obj:king_safety:flank_pawn_lunge",
     ObjectionKind.UNANSWERED_ADVANCED_FLANK_PAWN: "obj:king_safety:unanswered_advanced_flank_pawn",
+    ObjectionKind.QUEEN_FLANK_INVASION: "obj:king_safety:queen_flank_invasion",
     ObjectionKind.UNSUPPORTED_MAJOR_DRIFT: "obj:strategy:unsupported_major_drift",
     ObjectionKind.THREEFOLD_REPETITION: "obj:strategy:threefold_repetition",
     ObjectionKind.FIFTY_MOVE_DRAW: "obj:strategy:fifty_move_draw",
