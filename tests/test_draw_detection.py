@@ -10,6 +10,7 @@ from dialectical_chess.search import (
     terminal_or_leaf_result,
 )
 from dialectical_chess.uci import parse_uci_position_state
+from tests._label_helpers import labels_of  # noqa: E402
 
 
 def test_known_threefold_sequence_is_detected_from_uci_history() -> None:
@@ -52,8 +53,8 @@ def test_mate_in_one_on_one_hundredth_halfmove_scores_as_mate() -> None:
     }
 
     assert probes["g6g7"].score >= 1_000_000
-    assert "terminal:checkmate" in probes["g6g7"].reasons
-    assert "strategy:fifty_move_draw:g6g7" not in probes["g6g7"].objections
+    assert "terminal:checkmate" in labels_of(probes["g6g7"].reason_evidence)
+    assert "strategy:fifty_move_draw:g6g7" not in labels_of(probes["g6g7"].objection_evidence)
 
 
 def test_repetition_draw_move_is_not_scored_as_a_win() -> None:
@@ -85,4 +86,4 @@ def test_repetition_draw_move_is_not_scored_as_a_win() -> None:
     assert search_result is not None
     assert search_result.score == 0
     assert probes["g1f3"].score == 0
-    assert "strategy:threefold_repetition:g1f3" in probes["g1f3"].objections
+    assert "strategy:threefold_repetition:g1f3" in labels_of(probes["g1f3"].objection_evidence)

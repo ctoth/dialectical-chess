@@ -6,6 +6,7 @@ from io import StringIO
 import chess
 from hypothesis import given
 from hypothesis import strategies as st
+from tests._label_helpers import labels_of  # noqa: E402
 
 
 @given(
@@ -65,8 +66,8 @@ def test_engine_selects_mate_in_one() -> None:
     assert decision.move_uci == "a1a8"
     assert decision.selected is not None
     assert decision.selected.score == 2_001_050
-    assert "procedural:mate_in_one" in decision.selected.reasons
-    assert "smt:mate_in_one" not in decision.selected.reasons
+    assert "procedural:mate_in_one" in labels_of(decision.selected.reason_evidence)
+    assert "smt:mate_in_one" not in labels_of(decision.selected.reason_evidence)
 
 
 def test_engine_returns_null_decision_for_no_legal_moves() -> None:
