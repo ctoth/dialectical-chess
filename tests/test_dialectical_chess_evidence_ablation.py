@@ -46,7 +46,12 @@ def test_reporting_positional_comorphism_excludes_piece_safety() -> None:
     assert not is_tactical_reason("material:exchange_nonnegative:e4d5")
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F1: chosen move c3d5 -> e1g1 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: HEURISTIC outpost/tactical tie-break weight insufficient at chunk-G.1 starting tuning; selector still picks e1g1 over c3d5. Calibration deferred to chunk H."
+    ),
+)
 def test_argument_selector_uses_effective_score_before_raw_material_tie_break() -> None:
     board = owned_board_from_fen("r1bqk2r/1pppbppp/p1n1pn2/8/2B1P3/2N5/PPPPNPPP/R1BQK2R w KQkq - 4 6")
 
@@ -79,7 +84,12 @@ def test_argument_selector_keeps_piece_safety_score_in_tactical_mode() -> None:
     assert decision.move_uci == "f7d7"
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F2: chosen move f1b5 -> d5e6 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: chunk-F flip F2 traces to FACT pro:material capture priority; chunk-G HEURISTIC vocabulary does not change the FACT layer, so the d5e6 capture still dominates f1b5 bishop development. Re-tune or accept new baseline in chunk H."
+    ),
+)
 def test_exchange_nonnegative_does_not_count_as_extra_tactical_support() -> None:
     board = owned_board_from_fen("rnbqk1nr/ppp1bppp/4p3/3P4/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 1 4")
 
@@ -180,7 +190,12 @@ def test_ignored_hanging_piece_gets_safety_objection() -> None:
     )
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F3: chosen move b3c4 -> c3b5 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: chunk-F flip F3 traces to FACT pro:material capture priority; chunk-G HEURISTIC vocabulary does not change the FACT layer, so the c3b5 knight-c-pawn capture still dominates b3c4 save-the-minor reasoning. Defer to chunk H."
+    ),
+)
 def test_argument_selector_saves_hanging_minor() -> None:
     board = owned_board_from_fen("rnbqkbnr/3p1ppp/p3p3/1p6/2p1P3/1BN5/PPPP1PPP/R1BQK1NR w KQkq - 0 6")
 
@@ -333,7 +348,6 @@ def test_premature_minor_check_gets_development_objection() -> None:
     assert "opening:premature_minor_check:f8b4:undeveloped_minors:3" in labels_of(probes["f8b4"].objection_evidence)
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F4: chosen move != f8b4 violated; selector now picks f8b4 (see reports/core-phase3-chess-coder.md flip table)')
 def test_argument_selector_rejects_premature_minor_check() -> None:
     board = owned_board_from_fen("r1bqkbnr/pppp1ppp/2n1p3/8/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3")
 
@@ -350,7 +364,12 @@ def test_argument_selector_rejects_premature_minor_check() -> None:
     assert decision.move_uci != "f8b4"
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F5: chosen move f2f1 -> f2e1 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: chunk-F flip F5 is a pure move_id tiebreak (f2e1 < f2f1) between two tied pro:terminal_win/obj:terminal_loss moves; chunk-G HEURISTIC has no effect on the tied lex key. Defer to chunk H (tiebreaker policy review)."
+    ),
+)
 def test_argument_selector_rejects_search_proven_forced_mate() -> None:
     board = owned_board_from_fen("4k2r/1p2bppp/p4n2/6N1/P3rn2/4Q3/1P1P1K1q/R1B5 w k - 0 24")
 
@@ -495,7 +514,12 @@ def test_depth_zero_checks_mate_three_when_legal_moves_are_sparse() -> None:
     assert decision.move_uci in {"e2f3", "e2f2", "e2f1", "e2d1", "d4e5"}
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F6: chosen move g7g6 -> d7d6 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: pro:king_safety:escape_square HEURISTIC weight insufficient to flip g7g6 over d7d6 at chunk-G.1 starting tuning (base 0.55, u 0.30). Calibration deferred to chunk H."
+    ),
+)
 def test_pawn_move_can_create_king_escape_square() -> None:
     board = owned_board_from_fen("1R6/3p1kpp/4p3/4Pp2/1Bp5/5B2/5P1P/4K1R1 b - - 0 30")
     probes = {
@@ -588,7 +612,12 @@ def test_low_search_depth_checks_reply_mate_for_minor_retreats() -> None:
     assert decision.move_uci != "e4b7"
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F7: chosen move != a1f1 violated; selector now picks a1f1 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: chunk-F flip F7 is a post-decision-hook target shift driven by the selected probe identity; the chunk-G HEURISTIC weights restore some signal but not enough to revert the selected move at this position. Defer to chunk H."
+    ),
+)
 def test_low_search_depth_checks_reply_mate_for_material_captures() -> None:
     board = owned_board_from_fen("1k1r3r/1ppq1p2/p4np1/8/PB1b1P2/1PN2BK1/1QPP3P/R4b2 w - - 0 22")
 
@@ -750,7 +779,12 @@ def test_forced_reply_mate_scan_covers_large_search_refutations() -> None:
     assert decision.move_uci != "e7g6"
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F8: chosen move e7e1 -> b6b5 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: pro:piece_safety:defended:{n} HEURISTIC weight (centipawn-scale saturation 500) insufficient to flip e7e1 over b6b5 at chunk-G.1 starting tuning. Defer to chunk H."
+    ),
+)
 def test_argument_selector_falls_back_when_grounded_candidates_are_forced_mates() -> None:
     board = owned_board_from_fen("2k2bnr/2Bpqppp/1p6/3N4/1P6/Q2B1N2/5PPP/R3R1K1 b - - 0 19")
 
@@ -1116,7 +1150,12 @@ def test_low_search_depth_checks_forced_reply_mate_for_refuted_queen_moves() -> 
     assert decision.move_uci != "g4h4"
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F9: chosen move a6e2 -> g8e7 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: pro:tactical:threat:{n} HEURISTIC weight insufficient to flip a6e2 over g8e7 at chunk-G.1 starting tuning. Defer to chunk H."
+    ),
+)
 def test_low_search_depth_checks_forced_reply_mate_for_mildly_refuted_threats() -> None:
     board = owned_board_from_fen("rq2k1nr/2pp4/bp5p/p2P1QB1/8/2P2P2/P1P2PR1/2K1RB2 b kq - 1 17")
 
@@ -1169,7 +1208,12 @@ def test_castled_flank_pawn_push_gets_king_shield_objection() -> None:
     assert "king_safety:castled_flank_pawn_weakening:g2g4" in labels_of(probes["g2g4"].objection_evidence)
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F10: chosen move g7g6 -> a5a4 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: pro:king_safety:advanced_flank_pawn_response defeater-re-channelled-as-pro HEURISTIC weight insufficient to flip g7g6 over a5a4 at chunk-G.1 starting tuning. Defer to chunk H."
+    ),
+)
 def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
     board = owned_board_from_fen("r1bqk1nr/1ppp1ppp/2n5/p1bN4/4P1Q1/8/PPP2PPP/R1B1KBNR b KQkq - 1 6")
 
@@ -1229,7 +1273,6 @@ def test_queen_flank_invasion_gets_king_safety_objection() -> None:
     assert probes["g8f6"].score < probes["g7g6"].score
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F11: chosen move g8f6 -> b8c6 (see reports/core-phase3-chess-coder.md flip table)')
 def test_argument_selector_rejects_queen_flank_invasion() -> None:
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
 
@@ -1561,7 +1604,12 @@ def test_threefold_repetition_gets_history_objection() -> None:
     assert decision.move_uci != "g1f3"
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F12: chosen move e4e3 -> e4b7 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: pro-side restored via pro:tactical:threat:{n}; suppression defeater channel (COMPENSATING_TACTICAL_PRESSURE) has no core mapping in G.1, so the suppression interaction stays invisible (chunk-G.1 plan §7-D). Defer defeater channel to follow-up."
+    ),
+)
 def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:
     board = owned_board_from_fen("3k2nr/4b2p/1p1pppp1/pQ6/P3q2P/4B2N/1P3PP1/2R2RK1 b - - 1 25")
     probes = {
@@ -1956,7 +2004,12 @@ def test_low_clock_positive_rook_move_gets_forced_mate_depth_three_objection() -
     }
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F13: refuted set missing f4f5 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: post-decision reply-mate scan target shift; the new decider's selected probe is still different from chunk-F's (the chunk-G HEURISTIC weights did not restore the chunk-F selected move at this position). Defer to chunk H."
+    ),
+)
 def test_selected_low_clock_move_is_reranked_when_forced_mate_refutes_it() -> None:
     board = owned_board_from_fen("r3k2r/3n1pp1/2b1p2p/2p5/3bqP2/n4RB1/3K2PP/3Q3R w kq - 0 28")
 
@@ -1996,7 +2049,12 @@ def test_selected_low_clock_move_is_reranked_when_forced_mate_refutes_it() -> No
     }
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F14: refuted set missing e7c6 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: post-decision reply-mate scan target shift; same root cause as F13 — chunk-G HEURISTIC weights did not restore the chunk-F selected move at this position. Defer to chunk H."
+    ),
+)
 def test_selected_shallow_search_move_is_reranked_when_forced_mate_refutes_it() -> None:
     board = owned_board_from_fen("r1b3r1/ppNpnk1p/3P1ppP/B3p3/4P3/4KN2/4B1P1/R6R b - - 0 23")
 
@@ -2087,7 +2145,12 @@ def test_selected_shallow_search_fork_is_reranked_when_mate_in_four_refutes_it()
     }
 
 
-@pytest.mark.xfail(strict=True, reason='Chunk-F flip F15: reply-mate-in-4 label missing on b7d7 (see reports/core-phase3-chess-coder.md flip table)')
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Chunk-G.1 partial: post-decision mate-in-4 scan target shift; same root cause as F13/F14 — selected move identity differs from chunk-F under the new HEURISTIC weights. Defer to chunk H."
+    ),
+)
 def test_selected_shallow_search_rook_move_is_reranked_when_mate_in_four_refutes_it() -> None:
     board = owned_board_from_fen("2k4r/pr4pp/2p1N3/p2pPp2/3P4/P7/1PQ2PPP/R4R1K b - - 1 22")
 
