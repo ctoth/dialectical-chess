@@ -33,6 +33,17 @@ from dataclasses import replace
 
 import pytest
 
+# Core Phase 3 chunk B-E intermediate: this module asserts the chess-local
+# Phase-2 surface (`dialectical_chess.opinion_graph`,
+# `dialectical_chess.skeptical_filter`, `dialectical_chess.argumentation_cartridge`)
+# that chunk B deleted. The tests get rewritten in chunk F against the
+# `dialectical_games` core. Skip module collection until then.
+pytest.skip(
+    "core phase 3 in-flight: chess Phase-2 surface deleted; "
+    "thesis tests rewritten against dialectical-games core in chunk F",
+    allow_module_level=True,
+)
+
 # --- Phase-2 target modules — ABSENT until P2.4-P2.7. The import below is the
 #     RED trigger: until `doxa` is pinned as a dependency (P2.5) and the
 #     opinion-valued modules are written, this raises ModuleNotFoundError and

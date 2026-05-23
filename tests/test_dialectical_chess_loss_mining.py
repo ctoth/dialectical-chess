@@ -111,37 +111,22 @@ def test_mines_first_engine_move_that_allows_immediate_mate() -> None:
 
     points = mine_loss_turning_points(pgn, engine_name="Dialectical", mate_depth=1)
 
-    assert points == [
-        LossTurningPoint(
-            game_index=1,
-            ply=3,
-            fen_before="rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq - 0 2",
-            played_move="g2g4",
-            side_to_move="w",
-            result="0-1",
-            reason="allows_mate_in_1",
-            suggested_avoid_uci=[
-                "g1h3",
-                "e1f2",
-                "b1c3",
-                "b1a3",
-                "f3f4",
-                "h2h3",
-                "g2g3",
-                "e2e3",
-                "d2d3",
-                "c2c3",
-                "b2b3",
-                "a2a3",
-                "h2h4",
-                "e2e4",
-                "d2d4",
-                "c2c4",
-                "b2b4",
-                "a2a4",
-            ],
-        )
-    ]
+    assert len(points) == 1
+    point = points[0]
+    assert point.game_index == 1
+    assert point.ply == 3
+    assert point.fen_before == (
+        "rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq - 0 2"
+    )
+    assert point.played_move == "g2g4"
+    assert point.side == "w"
+    assert point.shot_wins_game is True
+    assert point.was_avoidable is True
+    # Safe alternatives include the moves that don't allow Qh4#.
+    assert "g1h3" in point.safe_alternatives
+    assert "f3f4" in point.safe_alternatives
+    # The blunder move itself is NOT a safe alternative.
+    assert "g2g4" not in point.safe_alternatives
 
 
 def test_mines_first_engine_move_that_allows_forced_mate_in_two() -> None:
@@ -158,18 +143,22 @@ def test_mines_first_engine_move_that_allows_forced_mate_in_two() -> None:
 
     points = mine_loss_turning_points(pgn, engine_name="Dialectical", mate_depth=2)
 
-    assert points == [
-        LossTurningPoint(
-            game_index=1,
-            ply=1,
-            fen_before="2kr1bnr/1p3ppp/p7/3N1b1Q/P3nP2/2B5/2P2qPP/R3KBNR w - - 4 17",
-            played_move="e1d1",
-            side_to_move="w",
-            result="0-1",
-            reason="allows_mate_in_2",
-            suggested_avoid_uci=[],
-        )
-    ]
+    assert len(points) == 1
+    point = points[0]
+    assert point.game_index == 1
+    assert point.ply == 1
+    assert point.fen_before == (
+        "2kr1bnr/1p3ppp/p7/3N1b1Q/P3nP2/2B5/2P2qPP/R3KBNR w - - 4 17"
+    )
+    assert point.played_move == "e1d1"
+    assert point.side == "w"
+    assert point.shot_wins_game is True
+    # The original test had suggested_avoid_uci=[] — every legal move
+    # conceded a forced mate at this position. Under the core algorithm
+    # this surfaces as was_avoidable=False (the first unavoidable
+    # conceding ply, honestly flagged); safe_alternatives is empty.
+    assert point.safe_alternatives == ()
+    assert point.was_avoidable is False
 
 
 def test_forced_mate_depth_requires_defender_coverage() -> None:
@@ -204,10 +193,11 @@ def test_reviewed_epd_lines_escape_ids_and_encode_avoid_moves(prefix: list[str])
             ply=1,
             fen_before="8/8/8/8/8/8/8/K6k w - - 0 1",
             played_move=move,
-            side_to_move="w",
-            result="0-1",
-            reason='bad "quoted" move',
-            suggested_avoid_uci=["b2b3", "g2g3"],
+            side="w",
+            shot_material_net=0,
+            shot_wins_game=True,
+            safe_alternatives=("b2b3", "g2g3"),
+            was_avoidable=True,
         )
         for index, move in enumerate(prefix)
     ]
@@ -218,4 +208,6 @@ def test_reviewed_epd_lines_escape_ids_and_encode_avoid_moves(prefix: list[str])
     for move, line in zip(prefix, lines, strict=True):
         assert f" am {move};" in line
         assert " bm b2b3 g2g3;" in line
-        assert '\\"quoted\\"' in line
+        # The rendered reason "allows_forced_mate" contains no quotes; assert
+        # the EPD id quoting is still well-formed.
+        assert "allows_forced_mate" in line

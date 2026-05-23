@@ -243,7 +243,6 @@ def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(mo
     its own ``has_forced_mate`` import binding). The guard patches BOTH so a
     proof on either path fails fast — patching only one would silently no-op
     against a call routed through the other."""
-    from dialectical_chess import argumentation_cartridge as cartridge_module
     from dialectical_chess import engine as engine_module
     from dialectical_chess.engine import EngineSettings
     from dialectical_chess.probe import owned_board_from_fen
@@ -256,10 +255,10 @@ def test_critical_clock_profile_bounds_selected_forced_mate_in_wide_positions(mo
             "critical profile should not run a selected forced-mate proof in wide positions"
         )
 
+    # Core Phase 3: the Phase-1 cartridge with its own has_forced_mate binding
+    # is deleted; the engine module is the only call site that holds a
+    # ``has_forced_mate`` reference. Patch only that one.
     monkeypatch.setattr(engine_module, "has_forced_mate", reject_unbounded_mate_search)
-    monkeypatch.setattr(
-        cartridge_module, "has_forced_mate", reject_unbounded_mate_search
-    )
     board = owned_board_from_fen("1rb1kr2/pp1p2pp/2nQ2n1/b5B1/5p2/2P2N2/PPK2P1P/R4B1R b - - 3 25")
     request = parse_go("go btime 1500 wtime 30000 binc 100 winc 100".split())
     settings, budget_ms = settings_for_go_request(

@@ -38,6 +38,10 @@ class OwnedMove:
     def uci(self) -> str:
         return square_name(self.from_square) + square_name(self.to_square) + (self.promotion or "")
 
+    def move_id(self) -> str:
+        """``Move`` Protocol shim: stable identifier (UCI) for the core."""
+        return self.uci()
+
 
 @dataclass(frozen=True)
 class OwnedBoard:
@@ -87,6 +91,10 @@ class OwnedBoard:
                 str(self.fullmove_number),
             ]
         )
+
+    def to_fen(self) -> str:
+        """``Board`` Protocol shim: round-trippable FEN for the core."""
+        return self.fen()
 
     def repetition_key(self) -> str:
         return " ".join(self.fen().split()[:4])
