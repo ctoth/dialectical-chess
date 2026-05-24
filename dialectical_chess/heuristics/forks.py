@@ -92,6 +92,7 @@ def fork_witness_labels(
                 kind=ObjectionKind.SMT_FORK_MOVED_PIECE_EN_PRIS,
                 strength=3,
                 world=EvidenceWorld.SMT,
+                objection_magnitude=witness.moved_piece_en_pris_value,
                 moved_piece_en_pris_value=witness.moved_piece_en_pris_value,
                 argument_value="tactical",
             ),
