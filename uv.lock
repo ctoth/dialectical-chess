@@ -39,7 +39,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "chess", specifier = ">=1.11.0" },
-    { name = "dialectical-games", git = "https://github.com/ctoth/dialectical-games.git?rev=37a6e8c4b18f2a1a623e2381dc68331248c0c651" },
+    { name = "dialectical-games", git = "https://github.com/ctoth/dialectical-games.git?rev=1cb7af21a5a18b2f47653615f0c5bced60409786" },
     { name = "doxa", git = "https://github.com/ctoth/doxa.git?rev=8ba6968f3c40c963786fae504a1719b02b2d17d0" },
     { name = "formal-argumentation", git = "https://github.com/ctoth/argumentation.git?rev=d47c87003afdce450bfeff10f242309c510f1690" },
 ]
@@ -55,7 +55,7 @@ dev = [
 [[package]]
 name = "dialectical-games"
 version = "0.1.0"
-source = { git = "https://github.com/ctoth/dialectical-games.git?rev=37a6e8c4b18f2a1a623e2381dc68331248c0c651#37a6e8c4b18f2a1a623e2381dc68331248c0c651" }
+source = { git = "https://github.com/ctoth/dialectical-games.git?rev=1cb7af21a5a18b2f47653615f0c5bced60409786#1cb7af21a5a18b2f47653615f0c5bced60409786" }
 dependencies = [
     { name = "doxa" },
     { name = "formal-argumentation" },
