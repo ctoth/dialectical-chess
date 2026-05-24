@@ -8,8 +8,9 @@ reply_attacks, defenses, child_eval, contested, search_score, search_line,
 score) carry the **core-taxonomy** labels and the core-decoder inputs; the
 chess extensions carry the chess-flavoured witness data for the chess
 cartridge's own reasoning and diagnostics. Per the Phase-3 foreman
-directive 3, chess HEURISTIC vocabulary stays on the chess extension
-fields only — it does NOT enter the core graded layer this cycle.
+directive 3, chess HEURISTIC vocabulary enters the core only through
+the explicit chess-to-core translator; the chess-flavoured originals stay
+on the extension fields for diagnostics.
 
 Pyright requires the subclass to be ``@dataclass(frozen=True)`` to inherit
 the parent's frozen behaviour cleanly (Python's dataclass machinery).
