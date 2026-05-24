@@ -39,6 +39,7 @@ def support(
     tactical_threat_value: int = 0,
     defended_piece_value: int | None = None,
     search_support_score: int | None = None,
+    support_magnitude: int | None = None,
     support_kind: SupportKind = SupportKind.GENERIC,
 ) -> ArgumentEvidence:
     return support_evidence(
@@ -51,6 +52,7 @@ def support(
         tactical_threat_value=tactical_threat_value,
         defended_piece_value=defended_piece_value,
         search_support_score=search_support_score,
+        support_magnitude=support_magnitude,
         support_kind=support_kind,
     )
 
