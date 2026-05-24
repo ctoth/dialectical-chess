@@ -30,6 +30,7 @@ class ObjectionKind(str, Enum):
     NO_IMMEDIATE_TACTICAL_WARRANT = "no_immediate_tactical_warrant"
     SEARCH_REFUTATION = "search_refutation"
     SMT_FORK_HIGH_VALUE = "smt_fork_high_value"
+    SMT_FORK_MOVED_PIECE_EN_PRIS = "smt_fork_moved_piece_en_pris"
     REPLY_MATE_IN_ONE = "reply_mate_in_one"
     REPLY_FORCED_MATE = "reply_forced_mate"
     QUEEN_BLUNDER = "queen_blunder"
@@ -363,6 +364,8 @@ def base_objection_strength(objection_kind: ObjectionKind) -> int:
         case ObjectionKind.SEARCH_REFUTATION:
             return 1
         case ObjectionKind.SMT_FORK_HIGH_VALUE:
+            return 3
+        case ObjectionKind.SMT_FORK_MOVED_PIECE_EN_PRIS:
             return 3
         case ObjectionKind.REPLY_MATE_IN_ONE:
             return 6
