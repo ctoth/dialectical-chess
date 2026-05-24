@@ -417,10 +417,13 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
         # reads. The chess-flavoured label strings stay on the chess
         # extension fields (reason_evidence / objection_evidence /
         # reply_attack_evidence) for chess-side reasoning.
-        core_reasons, core_objections, core_reply_attacks = core_labels_for_probe(
+        core_reasons, core_objections, core_reply_attacks, core_defenses = core_labels_for_probe(
             reason_evidence=tuple(reason_evidence),
             objection_evidence=tuple(objection_evidence_items),
             reply_attack_evidence=reply_attack_evidence,
+            gives_check=gives_check,
+            captured_value=captured_value,
+            promotion_value=promotion_value,
         )
         # child_eval — cartridge-precomputed centipawn-scale evaluation of
         # the post-move position. The graded policy squashes it to (0, 1).
@@ -442,7 +445,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                 reasons=core_reasons,
                 objections=core_objections,
                 reply_attacks=core_reply_attacks,
-                defenses=(),
+                defenses=core_defenses,
                 search_score=None if search_result is None else search_result.score,
                 search_line=() if search_result is None else search_result.line,
                 child_eval=prior_centipawn,

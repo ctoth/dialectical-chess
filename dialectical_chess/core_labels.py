@@ -32,12 +32,14 @@ from __future__ import annotations
 
 from dialectical_chess.evidence import (
     ArgumentEvidence,
+    COMPENSATING_TACTICAL_THREAT_THRESHOLD,
     DefeaterEvidence,
     DefeaterKind,
     ObjectionEvidence,
     ObjectionKind,
     ReplyEvidence,
     SupportEvidence,
+    SupportKind,
 )
 
 
@@ -46,25 +48,6 @@ _TERMINAL_CHECKMATE_LABEL = "terminal:checkmate"
 _PROCEDURAL_MATE_IN_ONE_LABEL = "procedural:mate_in_one"
 _MATERIAL_CAPTURE_PREFIX = "material:capture:"
 _MATERIAL_PROMOTION_PREFIX = "material:promotion:"
-
-# Chess HEURISTIC support label prefixes / suffixes (chunk G.1).
-_DEV_CENTER_PAWN_SUFFIX = ":center_pawn"
-_DEV_MINOR_PIECE_SUFFIX = ":minor_piece"
-_KS_CASTLE_SUFFIX = ":castle"
-_CENTER_CONTROL_PREFIX = "center_control:"
-_PIECE_ACTIVITY_PREFIX = "piece_activity:"
-_PIECE_ACTIVITY_MOBILITY_INFIX = ":mobility_gain:"
-_PAWN_STRUCTURE_PASSED_SUFFIX = ":passed_pawn"
-_FILE_CONTROL_OPEN_SUFFIX = ":open_file"
-_OUTPOST_SUPPORTED_SUFFIX = ":supported"
-_KS_ESCAPE_SQUARE_PREFIX = "king_safety:escape_square:"
-_KS_ADV_FLANK_RESP_PREFIX = "king_safety:advanced_flank_pawn_response:"
-_PIECE_SAFETY_DEFENDED_PREFIX = "piece_safety:defended:"
-_TACTICAL_THREAT_PREFIX = "tactical:threat:"
-_TACTICAL_CHECK_EXCH_PREFIX = "tactical:checking_exchange_pressure:"
-_SMT_FORK_TARGETS_PREFIX = "smt:fork:targets:"
-_SMT_FORK_MOVED_PIECE_EN_PRIS_PREFIX = "smt:fork:moved_piece_en_pris:"
-
 
 # Chess HEURISTIC objection ObjectionKind -> core label dispatch (chunk G.1).
 # The opening-undeveloped-minor kinds carry an ``:undeveloped_minors:{n}``
@@ -91,6 +74,28 @@ _FIXED_OBJECTION_BY_KIND: dict[ObjectionKind, str] = {
     ObjectionKind.SMT_FORK_HIGH_VALUE: "obj:smt:fork:high_value_piece",
 }
 
+_FIXED_SUPPORT_BY_KIND: dict[SupportKind, str] = {
+    SupportKind.TERMINAL_WIN: "pro:terminal_win",
+    SupportKind.DEVELOPMENT_CENTER_PAWN: "pro:development:center_pawn",
+    SupportKind.DEVELOPMENT_MINOR_PIECE: "pro:development:minor_piece",
+    SupportKind.KING_SAFETY_CASTLE: "pro:king_safety:castle",
+    SupportKind.PASSED_PAWN: "pro:pawn_structure:passed_pawn",
+    SupportKind.OPEN_FILE: "pro:file_control:open_file",
+    SupportKind.SUPPORTED_OUTPOST: "pro:outpost:supported",
+    SupportKind.KING_ESCAPE_SQUARE: "pro:king_safety:escape_square",
+    SupportKind.ADVANCED_FLANK_PAWN_RESPONSE: "pro:king_safety:advanced_flank_pawn_response",
+    SupportKind.CHECKING_EXCHANGE_PRESSURE: "pro:tactical:checking_exchange_pressure",
+}
+
+_MAGNITUDE_SUPPORT_PREFIX_BY_KIND: dict[SupportKind, str] = {
+    SupportKind.MATERIAL_GAIN: "pro:material",
+    SupportKind.CENTER_CONTROL: "pro:center_control",
+    SupportKind.MOBILITY_GAIN: "pro:mobility",
+    SupportKind.PIECE_DEFENDED: "pro:piece_safety:defended",
+    SupportKind.TACTICAL_THREAT: "pro:tactical:threat",
+    SupportKind.SMT_FORK: "pro:smt:fork",
+}
+
 
 def core_reason_label(evidence: ArgumentEvidence) -> str | None:
     """Map chess support evidence to a core-taxonomy reason label.
@@ -101,73 +106,17 @@ def core_reason_label(evidence: ArgumentEvidence) -> str | None:
     (the core taxonomy has no ``defeater:`` channel — chunk-G.1 plan §3).
     """
     if isinstance(evidence, DefeaterEvidence):
-        # Defeater evidence re-channelled as a positive pro: support for the
-        # move it defends (chunk G.1 — only ADVANCED_FLANK_PAWN_RESPONSE
-        # maps; the others have no G.1 mapping). See chunk-G.1 plan §3.
-        return _core_defeater_label(evidence)
+        return None
     if not isinstance(evidence, SupportEvidence):
         return None
-    label = evidence.label
-    if label == _TERMINAL_CHECKMATE_LABEL or label == _PROCEDURAL_MATE_IN_ONE_LABEL:
-        return "pro:terminal_win"
-    if label.startswith(_MATERIAL_CAPTURE_PREFIX):
-        magnitude = _parse_int_suffix(label, _MATERIAL_CAPTURE_PREFIX)
+    fixed = _FIXED_SUPPORT_BY_KIND.get(evidence.support_kind)
+    if fixed is not None:
+        return fixed
+    prefix = _MAGNITUDE_SUPPORT_PREFIX_BY_KIND.get(evidence.support_kind)
+    if prefix is not None:
+        magnitude = _support_magnitude(evidence)
         if magnitude is not None and magnitude > 0:
-            return f"pro:material:{magnitude}"
-        return None
-    if label.startswith(_MATERIAL_PROMOTION_PREFIX):
-        magnitude = _parse_int_suffix(label, _MATERIAL_PROMOTION_PREFIX)
-        if magnitude is not None and magnitude > 0:
-            return f"pro:material:{magnitude}"
-        return None
-    # Chess HEURISTIC support family (chunk G.1). Each branch is the
-    # smallest mechanical translation from the chess emitter's stringly-
-    # typed label to a core-taxonomy ``pro:`` key.
-    if label.startswith("development:") and label.endswith(_DEV_CENTER_PAWN_SUFFIX):
-        return "pro:development:center_pawn"
-    if label.startswith("development:") and label.endswith(_DEV_MINOR_PIECE_SUFFIX):
-        return "pro:development:minor_piece"
-    if label.startswith("king_safety:") and label.endswith(_KS_CASTLE_SUFFIX):
-        return "pro:king_safety:castle"
-    if label.startswith(_CENTER_CONTROL_PREFIX):
-        n = _parse_int_after_last_colon(label)
-        if n is not None and n > 0:
-            return f"pro:center_control:{n}"
-        return None
-    if label.startswith(_PIECE_ACTIVITY_PREFIX) and _PIECE_ACTIVITY_MOBILITY_INFIX in label:
-        n = _parse_int_after_last_colon(label)
-        if n is not None and n > 0:
-            return f"pro:mobility:{n}"
-        return None
-    if label.startswith("pawn_structure:") and label.endswith(_PAWN_STRUCTURE_PASSED_SUFFIX):
-        return "pro:pawn_structure:passed_pawn"
-    if label.startswith("file_control:") and label.endswith(_FILE_CONTROL_OPEN_SUFFIX):
-        return "pro:file_control:open_file"
-    if label.startswith("outpost:") and label.endswith(_OUTPOST_SUPPORTED_SUFFIX):
-        return "pro:outpost:supported"
-    if label.startswith(_KS_ESCAPE_SQUARE_PREFIX):
-        return "pro:king_safety:escape_square"
-    if label.startswith(_KS_ADV_FLANK_RESP_PREFIX):
-        return "pro:king_safety:advanced_flank_pawn_response"
-    if label.startswith(_PIECE_SAFETY_DEFENDED_PREFIX):
-        n = _parse_int_after_last_colon(label)
-        if n is not None and n > 0:
-            return f"pro:piece_safety:defended:{n}"
-        return None
-    if label.startswith(_TACTICAL_THREAT_PREFIX):
-        # "tactical:threat:targets:{c}:value:{v}" — take v as magnitude.
-        n = _parse_int_after_last_colon(label)
-        if n is not None and n > 0:
-            return f"pro:tactical:threat:{n}"
-        return None
-    if label.startswith(_TACTICAL_CHECK_EXCH_PREFIX):
-        return "pro:tactical:checking_exchange_pressure"
-    if label.startswith(_SMT_FORK_TARGETS_PREFIX):
-        # "smt:fork:targets:{n}:value:{v}" — take v as magnitude.
-        n = _parse_int_after_last_colon(label)
-        if n is not None and n > 0:
-            return f"pro:smt:fork:{n}"
-        return None
+            return f"{prefix}:{magnitude}"
     return None
 
 
@@ -237,39 +186,18 @@ def _heuristic_objection_label(evidence: ObjectionEvidence) -> str | None:
     kind = evidence.objection_kind
     prefix = _OPENING_UNDEV_PREFIXES_BY_KIND.get(kind)
     if prefix is not None:
-        # opening:premature_*:{move}:undeveloped_minors:{n} -> obj:.. :{n}.
-        n = _parse_int_after_last_colon(evidence.label)
+        n = evidence.objection_magnitude
         if n is not None and n > 0:
             return f"{prefix}:{n}"
         return None
     fixed = _FIXED_OBJECTION_BY_KIND.get(kind)
     if fixed is not None:
         return fixed
-    # smt:fork:moved_piece_en_pris:{n} arrives with no dedicated kind —
-    # SMT_FORK_HIGH_VALUE is the only fork ObjectionKind. Differentiate
-    # by label prefix.
-    if evidence.label.startswith(_SMT_FORK_MOVED_PIECE_EN_PRIS_PREFIX):
-        n = _parse_int_after_last_colon(evidence.label)
+    if kind is ObjectionKind.SMT_FORK_MOVED_PIECE_EN_PRIS:
+        n = evidence.objection_magnitude
         if n is not None and n > 0:
             return f"obj:smt:fork:moved_piece_en_pris:{n}"
         return None
-    return None
-
-
-def _core_defeater_label(evidence: DefeaterEvidence) -> str | None:
-    """Re-channel a chess defeater as a pro: support label (chunk G.1).
-
-    The core taxonomy has no ``defeater:`` channel; chess defeaters become
-    positive supports for the move they defend. Only
-    ``ADVANCED_FLANK_PAWN_RESPONSE`` has a G.1 mapping; the others
-    (``SEARCH_SUPPORT``, ``COMPENSATING_TACTICAL_PRESSURE``,
-    ``COMPENSATING_FORCING_PRESSURE``, ``FORCING_MATERIAL_GAIN``) stay
-    invisible to the core graded layer for this cycle — see chunk-G.1
-    plan §7-D for the F12 defeater-channel deficit.
-    """
-    kind = evidence.defeater_kind
-    if kind is DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE:
-        return "pro:king_safety:advanced_flank_pawn_response"
     return None
 
 
@@ -291,8 +219,13 @@ def core_labels_for_probe(
     reason_evidence: tuple[ArgumentEvidence, ...],
     objection_evidence: tuple[ArgumentEvidence, ...],
     reply_attack_evidence: tuple[ArgumentEvidence, ...],
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    """Return the ``(reasons, objections, reply_attacks)`` core-taxonomy
+    gives_check: bool = False,
+    captured_value: int = 0,
+    promotion_value: int = 0,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """Return the core-taxonomy label tuples for the chess witnesses on one probe.
+
+    The tuple shape is ``(reasons, objections, reply_attacks, defenses)``.
     label tuples for the chess witnesses on one probe. Duplicates are
     suppressed so the core graph builder sees each FACT label at most
     once per probe (the core builder treats duplicates as a single
@@ -312,7 +245,124 @@ def core_labels_for_probe(
         label = core_reply_attack_label(evidence)
         if label is not None and label not in reply_attacks:
             reply_attacks.append(label)
-    return tuple(reasons), tuple(objections), tuple(reply_attacks)
+    defenses = core_defense_labels_for_probe(
+        reason_evidence=reason_evidence,
+        objection_evidence=objection_evidence,
+        reply_attack_evidence=reply_attack_evidence,
+        gives_check=gives_check,
+        captured_value=captured_value,
+        promotion_value=promotion_value,
+    )
+    return tuple(reasons), tuple(objections), tuple(reply_attacks), defenses
+
+
+def core_defense_labels_for_probe(
+    *,
+    reason_evidence: tuple[ArgumentEvidence, ...],
+    objection_evidence: tuple[ArgumentEvidence, ...],
+    reply_attack_evidence: tuple[ArgumentEvidence, ...],
+    gives_check: bool = False,
+    captured_value: int = 0,
+    promotion_value: int = 0,
+) -> tuple[str, ...]:
+    """Return keyed core defense labels produced by typed chess defeaters."""
+    del reply_attack_evidence
+    defenses: list[str] = []
+    for objection in objection_evidence:
+        if not isinstance(objection, ObjectionEvidence):
+            continue
+        answered = core_objection_label(objection)
+        if answered is None:
+            continue
+        for defeater_kind in _defeaters_for_objection(
+            objection,
+            reason_evidence=reason_evidence,
+            gives_check=gives_check,
+            material_gain=captured_value + promotion_value,
+        ):
+            del defeater_kind
+            label = f"defense:heuristic_suppression@{answered}"
+            if label not in defenses:
+                defenses.append(label)
+    return tuple(defenses)
+
+
+def _defeaters_for_objection(
+    objection: ObjectionEvidence,
+    *,
+    reason_evidence: tuple[ArgumentEvidence, ...],
+    gives_check: bool,
+    material_gain: int,
+) -> tuple[DefeaterKind, ...]:
+    kind = objection.objection_kind
+    defeaters: list[DefeaterKind] = []
+    if kind is ObjectionKind.QUEEN_BLUNDER and _has_compensating_forcing_pressure(
+        reason_evidence, gives_check=gives_check, material_gain=material_gain
+    ):
+        defeaters.append(DefeaterKind.COMPENSATING_FORCING_PRESSURE)
+    if (
+        kind is ObjectionKind.MOVED_PIECE_EN_PRIS
+        and objection.moved_piece_en_pris_value is not None
+        and objection.moved_piece_en_pris_value >= 300
+    ):
+        if _has_compensating_tactical_pressure(reason_evidence):
+            defeaters.append(DefeaterKind.COMPENSATING_TACTICAL_PRESSURE)
+        if gives_check and material_gain > 0:
+            defeaters.append(DefeaterKind.FORCING_MATERIAL_GAIN)
+    if kind is ObjectionKind.OPENING_PREMATURE_MINOR_CHECK and _has_reason_defeater(
+        reason_evidence, DefeaterKind.SEARCH_SUPPORT
+    ):
+        defeaters.append(DefeaterKind.SEARCH_SUPPORT)
+    if kind in {
+        ObjectionKind.FLANK_PAWN_WEAKENING,
+        ObjectionKind.FLANK_PAWN_LUNGE,
+    } and _has_reason_defeater(
+        reason_evidence, DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE
+    ):
+        defeaters.append(DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE)
+    return tuple(defeaters)
+
+
+def _has_compensating_forcing_pressure(
+    evidence_items: tuple[ArgumentEvidence, ...],
+    *,
+    gives_check: bool,
+    material_gain: int,
+) -> bool:
+    return _has_compensating_tactical_pressure(evidence_items) and (
+        gives_check or material_gain > 0
+    )
+
+
+def _has_compensating_tactical_pressure(
+    evidence_items: tuple[ArgumentEvidence, ...],
+) -> bool:
+    return any(
+        isinstance(evidence, SupportEvidence | DefeaterEvidence)
+        and evidence.tactical_threat_value >= COMPENSATING_TACTICAL_THREAT_THRESHOLD
+        for evidence in evidence_items
+    )
+
+
+def _has_reason_defeater(
+    evidence_items: tuple[ArgumentEvidence, ...],
+    kind: DefeaterKind,
+) -> bool:
+    return any(
+        isinstance(evidence, DefeaterEvidence)
+        and evidence.defeater_kind is kind
+        for evidence in evidence_items
+    )
+
+
+def _support_magnitude(evidence: SupportEvidence) -> int | None:
+    if evidence.support_magnitude is not None:
+        return evidence.support_magnitude
+    if evidence.defended_piece_value is not None:
+        return evidence.defended_piece_value
+    if evidence.tactical_threat_value > 0:
+        return evidence.tactical_threat_value
+    return evidence.search_support_score
 
 
 def _parse_int_suffix(label: str, prefix: str) -> int | None:

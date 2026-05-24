@@ -165,7 +165,7 @@ def scan_forced_reply_mates_for_candidate_moves(
             # ``objections`` tuple (the core graph builder reads from
             # there). The chess-flavoured labels stay on the chess
             # extension ``objection_evidence``.
-            extra_reasons, extra_objections, extra_reply_attacks = core_labels_for_probe(
+            extra_reasons, extra_objections, extra_reply_attacks, _extra_defenses = core_labels_for_probe(
                 reason_evidence=(),
                 objection_evidence=forced_mate.evidence,
                 reply_attack_evidence=(),

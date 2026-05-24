@@ -36,6 +36,7 @@ from dialectical_chess.evidence import (
     DefeaterKind,
     EvidenceWorld,
     ObjectionKind,
+    SupportKind,
     defeater_evidence,
     objection_evidence,
     reply_evidence,
@@ -200,6 +201,7 @@ def test_heuristic_opening_undeveloped_minors_translate_with_magnitude(
         world=EvidenceWorld.POSITIONAL,
         objection_kind=kind,
         objection_strength=1,
+        objection_magnitude=undeveloped,
     )
     label = core_objection_label(ev)
     expected = f"{prefix}:{undeveloped}"
@@ -275,6 +277,8 @@ def test_material_capture_support_translates_to_pro_material(magnitude: int) -> 
         counts_as_tactical=True,
         argument_value="tactical",
         support_strength=1,
+        support_magnitude=magnitude,
+        support_kind=SupportKind.MATERIAL_GAIN,
     )
     label = core_reason_label(ev)
     assert label == f"pro:material:{magnitude}"
@@ -308,7 +312,7 @@ def test_core_labels_for_probe_dedupes_and_round_trips(
         )
         for m in magnitudes
     )
-    reasons, objections, reply_attacks = core_labels_for_probe(
+    reasons, objections, reply_attacks, defenses = core_labels_for_probe(
         reason_evidence=(),
         objection_evidence=objection_evidences,
         reply_attack_evidence=(),
@@ -322,6 +326,7 @@ def test_core_labels_for_probe_dedupes_and_round_trips(
     # Reasons / reply_attacks should be empty (no inputs).
     assert reasons == ()
     assert reply_attacks == ()
+    assert defenses == ()
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +357,7 @@ def test_chunk_g_development_center_pawn_translates(move: str) -> None:
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_kind=SupportKind.DEVELOPMENT_CENTER_PAWN,
     )
     label = core_reason_label(ev)
     assert label == "pro:development:center_pawn"
@@ -368,6 +374,7 @@ def test_chunk_g_development_minor_piece_translates(move: str) -> None:
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_kind=SupportKind.DEVELOPMENT_MINOR_PIECE,
     )
     assert core_reason_label(ev) == "pro:development:minor_piece"
 
@@ -380,6 +387,7 @@ def test_chunk_g_king_safety_castle_translates(move: str) -> None:
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_kind=SupportKind.KING_SAFETY_CASTLE,
     )
     assert core_reason_label(ev) == "pro:king_safety:castle"
 
@@ -394,6 +402,8 @@ def test_chunk_g_center_control_translates_with_magnitude(
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=count,
+        support_magnitude=count,
+        support_kind=SupportKind.CENTER_CONTROL,
     )
     label = core_reason_label(ev)
     assert label == f"pro:center_control:{count}"
@@ -413,6 +423,8 @@ def test_chunk_g_piece_activity_translates_to_pro_mobility(
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_magnitude=gain,
+        support_kind=SupportKind.MOBILITY_GAIN,
     )
     label = core_reason_label(ev)
     assert label == f"pro:mobility:{gain}"
@@ -431,6 +443,7 @@ def test_chunk_g_passed_pawn_translates(move: str) -> None:
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_kind=SupportKind.PASSED_PAWN,
     )
     assert core_reason_label(ev) == "pro:pawn_structure:passed_pawn"
 
@@ -443,6 +456,7 @@ def test_chunk_g_open_file_translates(move: str) -> None:
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_kind=SupportKind.OPEN_FILE,
     )
     assert core_reason_label(ev) == "pro:file_control:open_file"
 
@@ -455,6 +469,7 @@ def test_chunk_g_outpost_supported_translates(move: str) -> None:
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_kind=SupportKind.SUPPORTED_OUTPOST,
     )
     assert core_reason_label(ev) == "pro:outpost:supported"
 
@@ -467,6 +482,7 @@ def test_chunk_g_escape_square_translates(move: str, sq: str) -> None:
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_kind=SupportKind.KING_ESCAPE_SQUARE,
     )
     assert core_reason_label(ev) == "pro:king_safety:escape_square"
 
@@ -483,6 +499,7 @@ def test_chunk_g_advanced_flank_pawn_response_support_translates(move: str) -> N
         world=EvidenceWorld.POSITIONAL,
         counts_as_positional=True,
         support_strength=1,
+        support_kind=SupportKind.ADVANCED_FLANK_PAWN_RESPONSE,
     )
     assert core_reason_label(ev) == "pro:king_safety:advanced_flank_pawn_response"
 
@@ -496,6 +513,8 @@ def test_chunk_g_piece_safety_defended_translates(move: str, value: int) -> None
         counts_as_positional=True,
         support_strength=1,
         defended_piece_value=value,
+        support_magnitude=value,
+        support_kind=SupportKind.PIECE_DEFENDED,
     )
     label = core_reason_label(ev)
     assert label == f"pro:piece_safety:defended:{value}"
@@ -520,6 +539,8 @@ def test_chunk_g_tactical_threat_translates_with_value(
         counts_as_tactical=True,
         support_strength=1,
         tactical_threat_value=target_value,
+        support_magnitude=target_value,
+        support_kind=SupportKind.TACTICAL_THREAT,
     )
     label = core_reason_label(ev)
     assert label == f"pro:tactical:threat:{target_value}"
@@ -538,6 +559,7 @@ def test_chunk_g_checking_exchange_pressure_translates(move: str, gain: int) -> 
         world=EvidenceWorld.TACTICAL,
         counts_as_tactical=True,
         support_strength=1,
+        support_kind=SupportKind.CHECKING_EXCHANGE_PRESSURE,
     )
     assert core_reason_label(ev) == "pro:tactical:checking_exchange_pressure"
 
@@ -555,6 +577,8 @@ def test_chunk_g_smt_fork_targets_translates(
         world=EvidenceWorld.SMT,
         counts_as_tactical=True,
         support_strength=1,
+        support_magnitude=target_value,
+        support_kind=SupportKind.SMT_FORK,
     )
     label = core_reason_label(ev)
     assert label == f"pro:smt:fork:{target_value}"
@@ -567,14 +591,13 @@ def test_chunk_g_smt_fork_targets_translates(
 @pytest.mark.property
 @given(value=st.integers(min_value=100, max_value=900))
 def test_chunk_g_smt_fork_moved_piece_en_pris_objection_translates(value: int) -> None:
-    """``smt:fork:moved_piece_en_pris:{v}`` arrives via SMT_FORK_HIGH_VALUE
-    or no dedicated kind; the prefix-fallback in ``_heuristic_objection_label``
-    matches by label and produces the magnitude-carrying obj key."""
+    """``SMT_FORK_MOVED_PIECE_EN_PRIS`` carries its magnitude as typed evidence."""
     ev = objection_evidence(
         f"smt:fork:moved_piece_en_pris:{value}",
         world=EvidenceWorld.SMT,
-        objection_kind=ObjectionKind.NONE,
+        objection_kind=ObjectionKind.SMT_FORK_MOVED_PIECE_EN_PRIS,
         objection_strength=1,
+        objection_magnitude=value,
     )
     label = core_objection_label(ev)
     assert label == f"obj:smt:fork:moved_piece_en_pris:{value}"
@@ -587,16 +610,89 @@ def test_chunk_g_smt_fork_moved_piece_en_pris_objection_translates(value: int) -
 @pytest.mark.property
 @given(move=_MOVE_STRATEGY)
 def test_chunk_g_defeater_advanced_flank_pawn_response(move: str) -> None:
-    """The ADVANCED_FLANK_PAWN_RESPONSE defeater re-channels as a pro:
-    support — the core taxonomy has no defeater channel (chunk-G.1 §3).
-    """
+    """The ADVANCED_FLANK_PAWN_RESPONSE defeater emits a defense edge label."""
     ev = defeater_evidence(
         f"king_safety:advanced_flank_pawn_response:{move}",
         world=EvidenceWorld.POSITIONAL,
         defeater_kind=DefeaterKind.ADVANCED_FLANK_PAWN_RESPONSE,
         defeater_strength=33,
     )
-    assert core_reason_label(ev) == "pro:king_safety:advanced_flank_pawn_response"
+    objection = objection_evidence(
+        f"king_safety:flank_pawn_lunge:{move}",
+        world=EvidenceWorld.POSITIONAL,
+        objection_kind=ObjectionKind.FLANK_PAWN_LUNGE,
+        objection_strength=1,
+    )
+    reasons, objections, reply_attacks, defenses = core_labels_for_probe(
+        reason_evidence=(ev,),
+        objection_evidence=(objection,),
+        reply_attack_evidence=(),
+    )
+    assert reasons == ()
+    assert objections == ("obj:king_safety:flank_pawn_lunge",)
+    assert reply_attacks == ()
+    assert defenses == (
+        "defense:heuristic_suppression@obj:king_safety:flank_pawn_lunge",
+    )
+
+
+@pytest.mark.unit
+def test_search_support_defeats_premature_minor_check_objection() -> None:
+    """SEARCH_SUPPORT becomes a keyed defense against the typed opening objection."""
+    defeater = defeater_evidence(
+        "search_support:alphabeta:80",
+        world=EvidenceWorld.SEARCH,
+        defeater_kind=DefeaterKind.SEARCH_SUPPORT,
+        defeater_strength=97,
+        search_support_score=80,
+    )
+    objection = objection_evidence(
+        "opening:premature_minor_check:f8b4:undeveloped_minors:3",
+        world=EvidenceWorld.POSITIONAL,
+        objection_kind=ObjectionKind.OPENING_PREMATURE_MINOR_CHECK,
+        objection_strength=1,
+        objection_magnitude=3,
+    )
+
+    _reasons, _objections, _reply_attacks, defenses = core_labels_for_probe(
+        reason_evidence=(defeater,),
+        objection_evidence=(objection,),
+        reply_attack_evidence=(),
+    )
+
+    assert defenses == (
+        "defense:heuristic_suppression@obj:opening:premature_minor_check:3",
+    )
+
+
+@pytest.mark.unit
+def test_compensating_forcing_pressure_defeats_queen_blunder_objection() -> None:
+    """Compensating forcing pressure becomes a keyed defense label."""
+    pressure = support_evidence(
+        "tactical:threat:targets:1:value:900",
+        world=EvidenceWorld.TACTICAL,
+        counts_as_tactical=True,
+        support_strength=6,
+        tactical_threat_value=900,
+        support_magnitude=900,
+        support_kind=SupportKind.TACTICAL_THREAT,
+    )
+    objection = objection_evidence(
+        "safety:queen_blunder:d1h5:800",
+        world=EvidenceWorld.MATERIAL,
+        objection_kind=ObjectionKind.QUEEN_BLUNDER,
+        objection_strength=2,
+        moved_piece_en_pris_value=800,
+    )
+
+    _reasons, _objections, _reply_attacks, defenses = core_labels_for_probe(
+        reason_evidence=(pressure,),
+        objection_evidence=(objection,),
+        reply_attack_evidence=(),
+        gives_check=True,
+    )
+
+    assert defenses == ("defense:heuristic_suppression@obj:loses_exchange:800",)
 
 
 @pytest.mark.property
@@ -609,9 +705,7 @@ def test_chunk_g_defeater_advanced_flank_pawn_response(move: str) -> None:
     ]),
 )
 def test_chunk_g_other_defeaters_have_no_g1_mapping(kind: DefeaterKind) -> None:
-    """The non-ADVANCED_FLANK_PAWN_RESPONSE defeaters have no G.1 mapping —
-    they remain invisible to the core graded layer this cycle (chunk-G.1
-    plan §3 / §7-D documents the F12 defeater-channel deficit)."""
+    """Defeaters are not rechannelled as pro reasons."""
     ev = defeater_evidence(
         f"defeater:{kind.value}",
         world=EvidenceWorld.POSITIONAL,
