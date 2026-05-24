@@ -49,7 +49,12 @@ def test_reporting_positional_comorphism_excludes_piece_safety() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: HEURISTIC outpost/tactical tie-break weight insufficient at chunk-G.1 starting tuning; selector still picks e1g1 over c3d5. Calibration deferred to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF) does not flip "
+        "this position; the architecture's honest opinion level is "
+        "insufficient against `child_eval` here. e1g1 (raw-material "
+        "tie-break) is still chosen over c3d5 (HEURISTIC outpost/"
+        "tactical tie-break)."
     ),
 )
 def test_argument_selector_uses_effective_score_before_raw_material_tie_break() -> None:
@@ -87,7 +92,13 @@ def test_argument_selector_keeps_piece_safety_score_in_tactical_mode() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: chunk-F flip F2 traces to FACT pro:material capture priority; chunk-G HEURISTIC vocabulary does not change the FACT layer, so the d5e6 capture still dominates f1b5 bishop development. Re-tune or accept new baseline in chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF) does not flip "
+        "this position; the d5e6 capture's FACT pro:material is upstream "
+        "of the graded layer, and the graded layer's HEURISTIC support "
+        "for f1b5 (bishop development BOOLEAN) does not aggregate to "
+        "enough belief at the architecture's honest opinion level to "
+        "overturn the FACT-decided capture."
     ),
 )
 def test_exchange_nonnegative_does_not_count_as_extra_tactical_support() -> None:
@@ -193,7 +204,13 @@ def test_ignored_hanging_piece_gets_safety_objection() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: chunk-F flip F3 traces to FACT pro:material capture priority; chunk-G HEURISTIC vocabulary does not change the FACT layer, so the c3b5 knight-c-pawn capture still dominates b3c4 save-the-minor reasoning. Defer to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF) does not flip "
+        "this position; the c3b5 capture's FACT pro:material is upstream "
+        "of the graded layer, and the graded layer's HEURISTIC pro for "
+        "b3c4 (save-the-minor) does not aggregate to enough belief at "
+        "the architecture's honest opinion level to overturn the "
+        "FACT-decided capture."
     ),
 )
 def test_argument_selector_saves_hanging_minor() -> None:
@@ -252,17 +269,14 @@ def test_checked_king_center_flight_gets_safety_objection() -> None:
     assert "opening:king_center_flight:e8f8" not in labels_of(probes["e8f8"].objection_evidence)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Chunk-G.1 new flip F16: under chunk-G HEURISTIC weights e8f8 -> e8e7. "
-        "Hypothesis: the king-flight HEURISTIC objection on e8e7 is "
-        "outweighed by other HEURISTIC supports on e8e7 (or HEURISTIC "
-        "objections on e8f8) the chunk-G belief band introduces; "
-        "calibration / per-label weighting deferred to chunk H."
-    ),
-)
 def test_argument_selector_prefers_back_rank_check_evasion() -> None:
+    # Chunk H' recovery (former chunk-G.1 flip F16): the principled BOOLEAN
+    # derivation of `obj:opening:king_center_flight` on e8e7 -- a single
+    # observation under the max-entropy prior `Opinion.from_evidence(1, 0,
+    # 0.5)` -- now sums into a low-enough resolved opinion on e8e7 that
+    # e8f8 (back-rank check evasion) is once again the selector's choice.
+    # The chunk-G tuned belief band (0.55-0.70) had outweighed the
+    # objection here; the principled honest opinion does not.
     board = owned_board_from_fen("r2qk1nr/pbpp1pNp/1p6/8/3PP3/8/PP2BPPP/RN2K2R b KQkq - 0 12")
 
     decision = DialecticalChessEngine(
@@ -367,7 +381,14 @@ def test_argument_selector_rejects_premature_minor_check() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: chunk-F flip F5 is a pure move_id tiebreak (f2e1 < f2f1) between two tied pro:terminal_win/obj:terminal_loss moves; chunk-G HEURISTIC has no effect on the tied lex key. Defer to chunk H (tiebreaker policy review)."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF) does not flip "
+        "this position; the f2e1 vs f2f1 tie is on the FACT layer "
+        "(both moves carry pro:terminal_win / obj:terminal_loss) and "
+        "the graded layer is downstream of the FACT lex key. The "
+        "architecture's honest opinion level cannot reach the FACT-tied "
+        "moves -- a tiebreaker policy revision is the lever, not the "
+        "witness band."
     ),
 )
 def test_argument_selector_rejects_search_proven_forced_mate() -> None:
@@ -514,13 +535,14 @@ def test_depth_zero_checks_mate_three_when_legal_moves_are_sparse() -> None:
     assert decision.move_uci in {"e2f3", "e2f2", "e2f1", "e2d1", "d4e5"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Chunk-G.1 partial: pro:king_safety:escape_square HEURISTIC weight insufficient to flip g7g6 over d7d6 at chunk-G.1 starting tuning (base 0.55, u 0.30). Calibration deferred to chunk H."
-    ),
-)
 def test_pawn_move_can_create_king_escape_square() -> None:
+    # Chunk H' recovery (former chunk-G.1 flip F6): the principled BOOLEAN
+    # derivation of `pro:king_safety:escape_square` plus the per-position
+    # MATERIAL CDF for sibling magnitudes now selects g7g6 over d7d6.
+    # The chunk-G tuned belief band (0.55 base, 0.30 u) was insufficient
+    # here; the principled `Opinion.from_evidence(1, 0, 0.5)` BOOLEAN
+    # plus the per-position move_base_rate Hazen rank-fraction restored
+    # the correct verdict.
     board = owned_board_from_fen("1R6/3p1kpp/4p3/4Pp2/1Bp5/5B2/5P1P/4K1R1 b - - 0 30")
     probes = {
         probe.uci: probe
@@ -615,7 +637,14 @@ def test_low_search_depth_checks_reply_mate_for_minor_retreats() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: chunk-F flip F7 is a post-decision-hook target shift driven by the selected probe identity; the chunk-G HEURISTIC weights restore some signal but not enough to revert the selected move at this position. Defer to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF) does not flip "
+        "this position; the post-decision reply-mate scan's target "
+        "depends on the selected probe identity, and the architecture's "
+        "honest opinion level here does not revert the chunk-G selected "
+        "move. Post-decision-hook target shift is downstream of the "
+        "principled witness opinions; the lever is the hook target "
+        "policy, not the witness band."
     ),
 )
 def test_low_search_depth_checks_reply_mate_for_material_captures() -> None:
@@ -782,7 +811,13 @@ def test_forced_reply_mate_scan_covers_large_search_refutations() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: pro:piece_safety:defended:{n} HEURISTIC weight (centipawn-scale saturation 500) insufficient to flip e7e1 over b6b5 at chunk-G.1 starting tuning. Defer to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF for "
+        "pro:piece_safety:defended:{n}) does not flip this position; "
+        "the architecture's honest opinion level on the per-prefix "
+        "Hazen rank-fraction is insufficient to flip e7e1 over b6b5 "
+        "here. The principled MATERIAL CDF derivation replaces the "
+        "dying centipawn-saturation-at-500 tuning."
     ),
 )
 def test_argument_selector_falls_back_when_grounded_candidates_are_forced_mates() -> None:
@@ -1153,7 +1188,13 @@ def test_low_search_depth_checks_forced_reply_mate_for_refuted_queen_moves() -> 
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: pro:tactical:threat:{n} HEURISTIC weight insufficient to flip a6e2 over g8e7 at chunk-G.1 starting tuning. Defer to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF for "
+        "pro:tactical:threat:{n}) does not flip this position; the "
+        "architecture's honest opinion level on the per-prefix Hazen "
+        "rank-fraction is insufficient to flip a6e2 over g8e7 here. "
+        "The principled MATERIAL CDF derivation replaces the dying "
+        "saturated belief band."
     ),
 )
 def test_low_search_depth_checks_forced_reply_mate_for_mildly_refuted_threats() -> None:
@@ -1211,7 +1252,13 @@ def test_castled_flank_pawn_push_gets_king_shield_objection() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: pro:king_safety:advanced_flank_pawn_response defeater-re-channelled-as-pro HEURISTIC weight insufficient to flip g7g6 over a5a4 at chunk-G.1 starting tuning. Defer to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN derivation of `pro:king_safety:advanced_flank_pawn_"
+        "response` -- defeater re-channelled as pro -- "
+        "`Opinion.from_evidence(1, 0, 0.5)`) does not flip this "
+        "position; the architecture's honest opinion level is "
+        "insufficient to flip g7g6 over a5a4 here. The defeater channel "
+        "translation is upstream of the witness band."
     ),
 )
 def test_argument_selector_prefers_one_step_flank_pawn_response() -> None:
@@ -1273,15 +1320,14 @@ def test_queen_flank_invasion_gets_king_safety_objection() -> None:
     assert probes["g8f6"].score < probes["g7g6"].score
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Chunk-G.1.fix: legitimate `obj:king_safety:queen_flank_invasion` "
-        "translation alone insufficient at chunk-G.1 starting tuning; "
-        "deferred to chunk H calibration"
-    ),
-)
 def test_argument_selector_rejects_queen_flank_invasion() -> None:
+    # Chunk H' recovery (former chunk-G.1 flip F11): the principled BOOLEAN
+    # derivation of `obj:king_safety:queen_flank_invasion` --
+    # `Opinion.from_evidence(1, 0, 0.5)` -- now sums into the resolved
+    # opinion strongly enough to flip g8f6 over the previous selection.
+    # The chunk-G tuned belief band's "soft positional objection at
+    # base 0.55 with u 0.30" had not been enough; the principled honest
+    # opinion is.
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
 
     decision = DialecticalChessEngine(
@@ -1615,7 +1661,14 @@ def test_threefold_repetition_gets_history_objection() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: pro-side restored via pro:tactical:threat:{n}; suppression defeater channel (COMPENSATING_TACTICAL_PRESSURE) has no core mapping in G.1, so the suppression interaction stays invisible (chunk-G.1 plan §7-D). Defer defeater channel to follow-up."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "MATERIAL CDF for pro:tactical:threat:{n}) restores the pro side, "
+        "but the suppression defeater channel "
+        "(COMPENSATING_TACTICAL_PRESSURE) still has no core mapping. The "
+        "suppression interaction stays invisible to the graded layer; "
+        "the principled witness band cannot reach a defeater that "
+        "doesn't translate. Defeater channel addition is the lever, "
+        "not the witness band."
     ),
 )
 def test_forcing_queen_pressure_compensates_static_blunder_objection() -> None:
@@ -2015,7 +2068,13 @@ def test_low_clock_positive_rook_move_gets_forced_mate_depth_three_objection() -
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: post-decision reply-mate scan target shift; the new decider's selected probe is still different from chunk-F's (the chunk-G HEURISTIC weights did not restore the chunk-F selected move at this position). Defer to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF) does not flip "
+        "this position; the post-decision reply-mate scan's target "
+        "depends on the selected probe identity, and the architecture's "
+        "honest opinion level here does not restore the chunk-F "
+        "selected move. Hook target policy revision is the lever, not "
+        "the witness band."
     ),
 )
 def test_selected_low_clock_move_is_reranked_when_forced_mate_refutes_it() -> None:
@@ -2060,7 +2119,12 @@ def test_selected_low_clock_move_is_reranked_when_forced_mate_refutes_it() -> No
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: post-decision reply-mate scan target shift; same root cause as F13 — chunk-G HEURISTIC weights did not restore the chunk-F selected move at this position. Defer to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF) does not flip "
+        "this position; same root cause as F13 -- post-decision "
+        "reply-mate scan target shift driven by selected probe identity. "
+        "The architecture's honest opinion level here does not restore "
+        "the chunk-F selected move."
     ),
 )
 def test_selected_shallow_search_move_is_reranked_when_forced_mate_refutes_it() -> None:
@@ -2156,7 +2220,11 @@ def test_selected_shallow_search_fork_is_reranked_when_mate_in_four_refutes_it()
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Chunk-G.1 partial: post-decision mate-in-4 scan target shift; same root cause as F13/F14 — selected move identity differs from chunk-F under the new HEURISTIC weights. Defer to chunk H."
+        "Chunk-H' verdict: principled opinion derivation (beta-binomial "
+        "BOOLEAN / COUNT plus per-position MATERIAL CDF) does not flip "
+        "this position; same root cause as F13/F14 -- post-decision "
+        "mate-in-4 scan target shift driven by selected probe identity "
+        "under the principled witness opinions."
     ),
 )
 def test_selected_shallow_search_rook_move_is_reranked_when_mate_in_four_refutes_it() -> None:
