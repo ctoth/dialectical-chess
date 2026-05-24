@@ -208,11 +208,22 @@ def queen_flank_invasion_objections(
             ):
                 label = f"king_safety:queen_flank_invasion:{move.uci()}:{square_name(target)}"
                 labels.append(label)
+                # Carry the material magnitude (the value of the pawn the queen
+                # is now en-prise to / threatening on the flank square) so the
+                # FACT route in ``core_labels.core_objection_label`` produces
+                # ``obj:loses_exchange:{n}`` instead of falling through to
+                # the HEURISTIC dispatcher. ``captured`` was just verified to
+                # be a pawn at L206; ``OWNED_PIECE_VALUE`` gives the canonical
+                # centipawn value (pawn = 100) and keeps the lookup robust if
+                # the captured-piece guard is later loosened to cover knights
+                # or bishops on the flank.
+                en_pris_value = OWNED_PIECE_VALUE.get(captured.lower(), 0)
                 evidence.append(
                     objection(
                         label,
                         kind=ObjectionKind.QUEEN_FLANK_INVASION,
                         strength=9,
+                        moved_piece_en_pris_value=en_pris_value,
                     )
                 )
     if not labels:

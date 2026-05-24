@@ -1321,31 +1321,46 @@ def test_queen_flank_invasion_gets_king_safety_objection() -> None:
 
 
 def test_argument_selector_rejects_queen_flank_invasion() -> None:
-    # Chunk H'.fix verified causal chain (Codex MAJOR finding 2 resolution).
-    # The traced lex-key derivation (`scripts/chunkh_fix_f11_causal_chain.py`):
-    #   - All 27 probes survive the FACT layer (no terminal/material refutation
-    #     here). Term 1 (worst FACT-objection magnitude) ties 14 candidate moves
-    #     including g8f6 and b8c6 at the residual `obj:loses_exchange:10`
-    #     overhead. Term 2 (FACT pro-priority) is (0,0,0,0) for that whole
-    #     front group.
-    #   - The decision is made on TERM 3 (graded strength). The queen-flank-
-    #     invasion HEURISTIC objection attacks every move it tags via the
-    #     opinion-graph attack edge built at
-    #     `dialectical_games/arguments.py:361-372`, but it tags 24 of 27 moves
-    #     -- including both g8f6 and b8c6 -- so it does not differentiate
-    #     between the two leading FACT-tied candidates.
-    #   - g8f6 wins term 3 because it carries the strong HEURISTIC pro
-    #     `pro:tactical:threat:900` (the knight on f6 attacks the invading
-    #     queen on g4); b8c6 does not. With both moves equally attacked by
-    #     queen_flank_invasion, the extra principled pro lifts g8f6's resolved
-    #     graded opinion above b8c6's: g8f6 expectation 0.928 vs b8c6 0.920.
-    # The chunk-H' coder's original "the objection's mass flips g8f6"
-    # phrasing was directionally imprecise (the objection lowers g8f6 just as
-    # it lowers b8c6); the architectural recovery is real -- the chunk-H'
-    # principled BOOLEAN witness opinions, summed by `doxa.evaluate` over the
-    # opinion graph, produce term-3 graded strengths that select the move
-    # with the strongest principled pro-mass (a tactical threat on the queen)
-    # over the move without it.
+    # F11 upstream emitter fix verified causal chain
+    # (`scripts/f11_emitter_fix_verify.py`, run on this FEN).
+    #
+    # WHAT CHANGED. The chess emitter at
+    # `heuristics/king_safety.py:209-228` (`queen_flank_invasion_objections`)
+    # now stamps `moved_piece_en_pris_value = OWNED_PIECE_VALUE[captured]` on
+    # the emitted ObjectionEvidence. The FACT branch in
+    # `core_labels.core_objection_label` (lines 198-216) consequently
+    # produces `obj:loses_exchange:{n}` -- a real FACT objection -- instead
+    # of falling through to the HEURISTIC `obj:king_safety:queen_flank_invasion`
+    # dispatcher. Before this fix the FACT route was dead.
+    #
+    # POST-FIX LEX-KEY DERIVATION on F11.
+    #   - 27 candidate probes. The queen on g4 invades g7 on essentially
+    #     every move that doesn't directly defend or remove the g7 pawn, so
+    #     22 of 27 probes now carry `obj:loses_exchange:100` -- either from
+    #     QUEEN_FLANK_INVASION (e.g. b8c6, g8f6: queen still attacks g7
+    #     after the move) or, for g7g6/g7g5, from MOVED_PIECE_EN_PRIS (the
+    #     advancing pawn is en-prise to the queen).
+    #   - Term 1 (worst FACT-objection magnitude) is 100 for all 22 affected
+    #     probes; term 2 (FACT pro priority) is (0,0,0,0). FACT thus ties
+    #     22 survivors including g8f6 and b8c6.
+    #   - Term 3 (graded strength) still breaks the tie. g8f6 carries the
+    #     strong HEURISTIC pro `pro:tactical:threat:900` (the knight on f6
+    #     attacks the invading queen on g4); b8c6 does not. The principled
+    #     pro-mass summed by `doxa.evaluate` over the opinion graph lifts
+    #     g8f6's resolved graded opinion above b8c6's.
+    #
+    # ROUTE CLASSIFICATION. The fix lights up the FACT layer -- 22 moves
+    # are now FACT-objected at magnitude 100 instead of being silent there
+    # -- but every plausible response to the queen invasion costs the same
+    # pawn, so the FACT layer cannot uniquely select. The graded layer
+    # remains the tiebreaker for this exact position. Honest classification:
+    # the FACT route is ALIVE (the chain that was previously dead now
+    # produces real `obj:loses_exchange:100` labels) but is not the
+    # *differentiator* between g8f6 and b8c6 -- both have the same FACT
+    # magnitude, the graded `pro:tactical:threat:900` still decides.
+    # The defensive fallthrough comment in `core_labels.py:213-222` was
+    # updated to reflect that the QUEEN_FLANK_INVASION FACT path is now
+    # the primary route.
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
 
     decision = DialecticalChessEngine(

@@ -210,10 +210,15 @@ def core_objection_label(evidence: ArgumentEvidence) -> str | None:
                 magnitude = -score
         if magnitude is not None and magnitude > 0:
             return f"obj:loses_exchange:{magnitude}"
-        # Chunk-G.1: when the FACT route is dead (no magnitude), fall
-        # through to the HEURISTIC dispatcher so QUEEN_FLANK_INVASION still
-        # gets the HEURISTIC obj label (the FACT-route fix at the upstream
-        # emitter — heuristics/king_safety.py:209-217 — is deferred).
+        # Defensive fall-through: every FACT objection kind above SHOULD
+        # carry either a ``moved_piece_en_pris_value`` (from the upstream
+        # emitter) or a ``search_refutation_score`` (from search refutation).
+        # If neither is set, we drop to the HEURISTIC dispatcher so the
+        # objection still surfaces as some core label. The
+        # ``QUEEN_FLANK_INVASION`` emitter at ``heuristics/king_safety.py``
+        # now provides the en-pris value (F11 upstream emitter fix), so the
+        # FACT route is live for that kind — the fallthrough here only
+        # covers future regressions.
     # Chess HEURISTIC objections (chunk G.1).
     return _heuristic_objection_label(evidence)
 
