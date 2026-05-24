@@ -46,14 +46,26 @@ def fork_witness_labels(
     witness: Any,
     gives_check: bool,
 ) -> tuple[tuple[str, ...], tuple[ArgumentEvidence, ...], tuple[str, ...], tuple[ArgumentEvidence, ...], int]:
+    target_label = f"smt:fork:targets:{witness.target_count}:value:{witness.target_value}"
     labels = [
-        f"smt:fork:targets:{witness.target_count}:value:{witness.target_value}",
+        target_label,
         f"smt:fork:piece:{witness.piece}",
         f"smt:fork:net:{witness.net_value}",
     ]
     if gives_check:
         labels.append("smt:fork:gives_check")
-    reason_evidence = [display_evidence(label, world=EvidenceWorld.SMT) for label in labels]
+    reason_evidence = [
+        support(
+            target_label,
+            world=EvidenceWorld.SMT,
+            counts_as_tactical=True,
+            argument_value="tactical",
+            strength=4,
+            support_magnitude=witness.target_value,
+            support_kind=SupportKind.SMT_FORK,
+        ),
+        *(display_evidence(label, world=EvidenceWorld.SMT) for label in labels[1:]),
+    ]
     if witness.piece in {"q", "r"} and not gives_check:
         objection_label = f"smt:fork:high_value_piece:{witness.piece}"
         return (
