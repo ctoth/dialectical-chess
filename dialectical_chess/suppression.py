@@ -183,9 +183,14 @@ def material_or_promotion_gain(probe: MoveProbe) -> int:
 
 def has_development_reason(probe: MoveProbe) -> bool:
     """A reason is a development support witness."""
+    development_kinds = {
+        SupportKind.DEVELOPMENT,
+        SupportKind.DEVELOPMENT_CENTER_PAWN,
+        SupportKind.DEVELOPMENT_MINOR_PIECE,
+    }
     return any(
         isinstance(evidence, SupportEvidence | DefeaterEvidence)
-        and evidence.support_kind == SupportKind.DEVELOPMENT
+        and evidence.support_kind in development_kinds
         for evidence in probe.reason_evidence
     )
 
