@@ -86,7 +86,16 @@ def fork_witness_labels(
     if witness.moved_piece_en_pris_value:
         objection_label = f"smt:fork:moved_piece_en_pris:{witness.moved_piece_en_pris_value}"
         objections = (objection_label,)
-        objection_evidence = (display_evidence(objection_label, world=EvidenceWorld.SMT),)
+        objection_evidence = (
+            objection(
+                objection_label,
+                kind=ObjectionKind.SMT_FORK_MOVED_PIECE_EN_PRIS,
+                strength=3,
+                world=EvidenceWorld.SMT,
+                moved_piece_en_pris_value=witness.moved_piece_en_pris_value,
+                argument_value="tactical",
+            ),
+        )
         if witness.net_value <= 0 and not gives_check:
             return tuple(labels), tuple(reason_evidence), objections, objection_evidence, 0
     compatibility = f"smt:fork:{witness.target_count}:{witness.target_value}"
