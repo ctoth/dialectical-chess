@@ -75,6 +75,8 @@ def moved_piece_safety_labels(
                 argument_value="positional",
                 strength=defended_piece_support_strength(moved_value),
                 defended_piece_value=moved_value,
+                support_magnitude=moved_value,
+                support_kind=SupportKind.PIECE_DEFENDED,
             )
         )
         score += MOVED_PIECE_DEFENDED_SCORE
@@ -90,6 +92,8 @@ def moved_piece_safety_labels(
                     counts_as_tactical=True,
                     argument_value="tactical",
                     strength=3,
+                    support_magnitude=max(1, exchange_gain),
+                    support_kind=SupportKind.CHECKING_EXCHANGE_PRESSURE,
                 )
             )
         elif exchange_gain < 0:
@@ -154,6 +158,8 @@ def moved_piece_threat_labels(
                 argument_value="tactical",
                 strength=6 if target_value >= 700 else 3,
                 tactical_threat_value=target_value,
+                support_magnitude=target_value,
+                support_kind=SupportKind.TACTICAL_THREAT,
             ),
         ),
         min(target_value, 700),
