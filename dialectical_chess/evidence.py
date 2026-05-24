@@ -69,6 +69,22 @@ class EvidenceRole(str, Enum):
 class SupportKind(str, Enum):
     GENERIC = "generic"
     DEVELOPMENT = "development"
+    TERMINAL_WIN = "terminal_win"
+    MATERIAL_GAIN = "material_gain"
+    DEVELOPMENT_CENTER_PAWN = "development_center_pawn"
+    DEVELOPMENT_MINOR_PIECE = "development_minor_piece"
+    KING_SAFETY_CASTLE = "king_safety_castle"
+    CENTER_CONTROL = "center_control"
+    MOBILITY_GAIN = "mobility_gain"
+    PASSED_PAWN = "passed_pawn"
+    OPEN_FILE = "open_file"
+    SUPPORTED_OUTPOST = "supported_outpost"
+    KING_ESCAPE_SQUARE = "king_escape_square"
+    ADVANCED_FLANK_PAWN_RESPONSE = "advanced_flank_pawn_response"
+    PIECE_DEFENDED = "piece_defended"
+    TACTICAL_THREAT = "tactical_threat"
+    CHECKING_EXCHANGE_PRESSURE = "checking_exchange_pressure"
+    SMT_FORK = "smt_fork"
 
 
 @dataclass(frozen=True)
@@ -82,6 +98,7 @@ class SupportEvidence:
     tactical_threat_value: int = 0
     defended_piece_value: int | None = None
     search_support_score: int | None = None
+    support_magnitude: int | None = None
     support_kind: SupportKind = SupportKind.GENERIC
     role: EvidenceRole = EvidenceRole.SUPPORT
     tier: Tier = Tier.HEURISTIC
@@ -149,6 +166,7 @@ def support_evidence(
     tactical_threat_value: int = 0,
     defended_piece_value: int | None = None,
     search_support_score: int | None = None,
+    support_magnitude: int | None = None,
     support_kind: SupportKind = SupportKind.GENERIC,
 ) -> SupportEvidence:
     return SupportEvidence(
@@ -161,6 +179,7 @@ def support_evidence(
         tactical_threat_value=tactical_threat_value,
         defended_piece_value=defended_piece_value,
         search_support_score=search_support_score,
+        support_magnitude=support_magnitude,
         support_kind=support_kind,
     )
 
