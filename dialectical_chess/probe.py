@@ -14,6 +14,7 @@ from dialectical_chess.evidence import (
     DefeaterKind,
     EvidenceWorld,
     ObjectionKind,
+    SupportKind,
     defeater_evidence,
     defeater_strength,
 )
@@ -152,6 +153,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                     counts_as_tactical=True,
                     argument_value="terminal",
                     strength=9,
+                    support_kind=SupportKind.TERMINAL_WIN,
                 )
             )
         elif is_draw:
@@ -182,6 +184,8 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                     counts_as_tactical=True,
                     argument_value="tactical",
                     strength=material_support_strength(captured_value),
+                    support_magnitude=captured_value,
+                    support_kind=SupportKind.MATERIAL_GAIN,
                 )
             )
         if not is_draw and promotion_value:
@@ -195,6 +199,8 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                     counts_as_tactical=True,
                     argument_value="tactical",
                     strength=17,
+                    support_magnitude=promotion_value,
+                    support_kind=SupportKind.MATERIAL_GAIN,
                 )
             )
         if not is_draw and not is_checkmate:
@@ -297,6 +303,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                     world=EvidenceWorld.PROCEDURAL,
                     counts_as_tactical=True,
                     strength=9,
+                    support_kind=SupportKind.TERMINAL_WIN,
                 )
             )
             smt_witnesses.append("procedural_mate_in_one")
@@ -341,6 +348,7 @@ def probe_moves_with_settings(board: Any, settings: ProbeSettings) -> list[MoveP
                         argument_value="search",
                         support_strength=4,
                         search_support_score=search_result.score,
+                        support_kind=SupportKind.SEARCH_SUPPORT,
                     )
                 )
                 reason_evidence.append(display_evidence(search_line_label, world=EvidenceWorld.SEARCH))

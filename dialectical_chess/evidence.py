@@ -85,6 +85,7 @@ class SupportKind(str, Enum):
     TACTICAL_THREAT = "tactical_threat"
     CHECKING_EXCHANGE_PRESSURE = "checking_exchange_pressure"
     SMT_FORK = "smt_fork"
+    SEARCH_SUPPORT = "search_support"
 
 
 @dataclass(frozen=True)
