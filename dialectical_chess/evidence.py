@@ -116,6 +116,7 @@ class ObjectionEvidence:
     world: EvidenceWorld
     objection_kind: ObjectionKind = ObjectionKind.NONE
     objection_strength: int = 0
+    objection_magnitude: int | None = None
     moved_piece_en_pris_value: int | None = None
     search_refutation_score: int | None = None
     forced_mate_distance: int | None = None
@@ -231,6 +232,7 @@ def objection_evidence(
     world: EvidenceWorld,
     objection_kind: ObjectionKind,
     objection_strength: int,
+    objection_magnitude: int | None = None,
     moved_piece_en_pris_value: int | None = None,
     search_refutation_score: int | None = None,
     forced_mate_distance: int | None = None,
@@ -241,6 +243,7 @@ def objection_evidence(
         world=world,
         objection_kind=objection_kind,
         objection_strength=objection_strength,
+        objection_magnitude=objection_magnitude,
         moved_piece_en_pris_value=moved_piece_en_pris_value,
         search_refutation_score=search_refutation_score,
         forced_mate_distance=forced_mate_distance,
