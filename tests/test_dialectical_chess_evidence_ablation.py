@@ -1321,13 +1321,31 @@ def test_queen_flank_invasion_gets_king_safety_objection() -> None:
 
 
 def test_argument_selector_rejects_queen_flank_invasion() -> None:
-    # Chunk H' recovery (former chunk-G.1 flip F11): the principled BOOLEAN
-    # derivation of `obj:king_safety:queen_flank_invasion` --
-    # `Opinion.from_evidence(1, 0, 0.5)` -- now sums into the resolved
-    # opinion strongly enough to flip g8f6 over the previous selection.
-    # The chunk-G tuned belief band's "soft positional objection at
-    # base 0.55 with u 0.30" had not been enough; the principled honest
-    # opinion is.
+    # Chunk H'.fix verified causal chain (Codex MAJOR finding 2 resolution).
+    # The traced lex-key derivation (`scripts/chunkh_fix_f11_causal_chain.py`):
+    #   - All 27 probes survive the FACT layer (no terminal/material refutation
+    #     here). Term 1 (worst FACT-objection magnitude) ties 14 candidate moves
+    #     including g8f6 and b8c6 at the residual `obj:loses_exchange:10`
+    #     overhead. Term 2 (FACT pro-priority) is (0,0,0,0) for that whole
+    #     front group.
+    #   - The decision is made on TERM 3 (graded strength). The queen-flank-
+    #     invasion HEURISTIC objection attacks every move it tags via the
+    #     opinion-graph attack edge built at
+    #     `dialectical_games/arguments.py:361-372`, but it tags 24 of 27 moves
+    #     -- including both g8f6 and b8c6 -- so it does not differentiate
+    #     between the two leading FACT-tied candidates.
+    #   - g8f6 wins term 3 because it carries the strong HEURISTIC pro
+    #     `pro:tactical:threat:900` (the knight on f6 attacks the invading
+    #     queen on g4); b8c6 does not. With both moves equally attacked by
+    #     queen_flank_invasion, the extra principled pro lifts g8f6's resolved
+    #     graded opinion above b8c6's: g8f6 expectation 0.928 vs b8c6 0.920.
+    # The chunk-H' coder's original "the objection's mass flips g8f6"
+    # phrasing was directionally imprecise (the objection lowers g8f6 just as
+    # it lowers b8c6); the architectural recovery is real -- the chunk-H'
+    # principled BOOLEAN witness opinions, summed by `doxa.evaluate` over the
+    # opinion graph, produce term-3 graded strengths that select the move
+    # with the strongest principled pro-mass (a tactical threat on the queen)
+    # over the move without it.
     board = owned_board_from_fen("rnbqk1nr/1ppp1ppp/4p3/p7/3P2Q1/2P5/P1P2PPP/R1B1KBNR b KQkq - 0 5")
 
     decision = DialecticalChessEngine(
