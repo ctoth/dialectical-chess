@@ -57,38 +57,38 @@ def positional_reason_labels(board: OwnedBoard, move: Any, child: OwnedBoard) ->
     if kind == "p" and file_of(move.from_square) in {3, 4} and abs(to_rank - from_rank) == 2:
         label = f"development:{move_text}:center_pawn"
         labels.append(label)
-        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.DEVELOPMENT))
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.DEVELOPMENT_CENTER_PAWN))
     if kind in {"n", "b"} and from_rank == (0 if color == "w" else 7):
         label = f"development:{move_text}:minor_piece"
         labels.append(label)
-        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.DEVELOPMENT))
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.DEVELOPMENT_MINOR_PIECE))
     if move.kind == "castle":
         label = f"king_safety:{move_text}:castle"
         labels.append(label)
-        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.KING_SAFETY_CASTLE))
 
     center_count = moved_piece_center_control(child, move.to_square, piece)
     if center_count:
         label = f"center_control:{move_text}:{center_count}"
         labels.append(label)
-        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.CENTER_CONTROL, support_magnitude=center_count))
     activity_gain = moved_piece_activity_gain(board, child, move.from_square, move.to_square, piece)
     if activity_gain > 0:
         label = f"piece_activity:{move_text}:mobility_gain:{activity_gain}"
         labels.append(label)
-        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.MOBILITY_GAIN, support_magnitude=activity_gain))
     if kind == "p" and is_passed_pawn(child, move.to_square, color):
         label = f"pawn_structure:{move_text}:passed_pawn"
         labels.append(label)
-        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.PASSED_PAWN))
     if kind in {"r", "q"} and controls_open_file(child, move.to_square):
         label = f"file_control:{move_text}:open_file"
         labels.append(label)
-        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.OPEN_FILE))
     if kind == "n" and is_supported_outpost(child, move.to_square, color):
         label = f"outpost:{move_text}:supported"
         labels.append(label)
-        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1))
+        evidence.append(support(label, world=EvidenceWorld.POSITIONAL, counts_as_positional=True, argument_value="positional", strength=1, support_kind=SupportKind.SUPPORTED_OUTPOST))
     return EvidenceLabels(tuple(labels), tuple(evidence))
 
 def moved_piece_center_control(board: OwnedBoard, source_square: int, piece: str) -> int:
